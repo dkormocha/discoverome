@@ -7,8 +7,8 @@ def create_app():
 
     # create and configure the app
     app = Flask(__name__)
-    app.config.from_object('claymor.default_settings')
-    app.config.from_envvar('CLAYMOR_SETTINGS')
+    app.config.from_object('discoverome.default_settings')
+    app.config.from_envvar('DISCOVEROME_SETTINGS')
 
     # ensure the instance folder exists
     try:
