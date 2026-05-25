@@ -16,7 +16,7 @@ def create_app():
     except OSError:
         pass
 
-    from claymor.models import db, migrate
+    from extensions import db, migrate
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -25,6 +25,6 @@ def create_app():
 
 #Get db connection
 def get_db():
-    if 'db' not in g: #check if the 'db' key is in the flask 'g' global object 
-        g.db = SQLAlchemy(current_app) #if it is not then create a SQLAlchemy database connection and point to our app 'current_app'. Connects database to our app
+    if 'db' not in g:
+        g.db = SQLAlchemy(current_app) 
     return g.db
