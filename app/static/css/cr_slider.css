@@ -1,0 +1,29 @@
+.slider-styled,
+.slider-styled .noUi-handle {
+    box-shadow: none;
+}
+
+/* Hide markers on slider handles */
+.slider-styled .noUi-handle::before,
+.slider-styled .noUi-handle::after {
+    display: none;
+}
+
+
+#cr_slider {
+height: 20px;
+}
+
+#cr_slider .noUi-connect {
+    background: #c0392b;
+}
+
+#cr_slider .noUi-handle {
+    height: 30px;
+    width: 30px;
+    top: -5px;
+    right: -15px; 
+    border-radius: 15px;
+    background: #c0392b;
+
+}

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>{% block page_title %}Discoverome{% endblock %}</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400&display=swap"
+    rel="stylesheet">
+
+  <!-- Bootstrap 5 -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+    rel="stylesheet">
+
+  <!-- jQuery UI -->
+  <link
+    rel="stylesheet"
+    href="https://code.jquery.com/ui/1.14.1/themes/base/jquery-ui.css">
+
+  <!-- DataTables -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.datatables.net/2.3.2/css/dataTables.dataTables.min.css">
+
+  <!-- noUiSlider -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/nouislider@15.8.1/dist/nouislider.min.css">
+
+  <!-- App CSS -->
+  <link
+    rel="stylesheet"
+    href="{{ url_for('static', filename='css/style.css') }}">
+  <link
+    rel="stylesheet"
+    href="{{url_for('static', filename='css/auto_complete.css')}}">
+
+  {% block extra_css %}{% endblock %}
+</head>
+
+<body>
+
+  <div class="bg-glow bg-glow-1"></div>
+  <div class="bg-glow bg-glow-2"></div>
+  <div class="bg-glow bg-glow-3"></div>
+
+  <nav class="navbar navbar-expand-lg">
+    <div class="container-fluid">
+
+      <a class="navbar-brand logo-wordmark" href="{{ url_for('index') }}">
+        <span class="discover">Discover</span><span class="ome">ome</span>
+      </a>
+
+      <div class="ms-auto d-flex align-items-center gap-3">
+        <a class="nav-link" href="/all_compounds">Compounds</a>
+        <a class="nav-link" href="/global_proteomics">Global Proteomics</a>
+        <a class="nav-link" href="/protein_compound_gp">GP Protein Search</a>
+      </div>
+
+    </div>
+  </nav>
+
+  <main class="page-wrap">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>© Discoverome</p>
+    </div>
+  </footer>
+
+  <!-- jQuery -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+  <!-- jQuery UI -->
+  <script src="https://code.jquery.com/ui/1.14.1/jquery-ui.min.js"></script>
+
+  <!-- Bootstrap -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- DataTables -->
+  <script src="https://cdn.datatables.net/2.3.2/js/dataTables.min.js"></script>
+
+  <!-- noUiSlider -->
+  <script src="https://cdn.jsdelivr.net/npm/nouislider@15.8.1/dist/nouislider.min.js"></script>
+
+{% block extra_js %}
+
+<script src="{{ url_for('static', filename='/js/particles.js') }}"></script>
+
+<script src="{{ url_for('static', filename='js/search_ui.js') }}"></script>
+
+<script src="{{ url_for('static', filename='js/datatable.js') }}"></script>
+
+<script src="{{ url_for('static', filename='js/auto_complete.js') }}"></script>
+
+<script src="{{ url_for('static', filename='js/slider.js') }}"></script>
+
+{% endblock %}
+
+
+
+
+</body>
+</html>

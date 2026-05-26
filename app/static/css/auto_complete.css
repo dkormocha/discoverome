@@ -1,0 +1,76 @@
+
+.ui-autocomplete {
+
+  max-height: 320px;
+
+  overflow-y: auto;
+
+  overflow-x: hidden;
+
+  background: rgba(20, 20, 30, 0.82);
+
+  backdrop-filter: blur(12px);
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+
+  border-radius: 14px;
+
+  padding: 8px;
+
+  z-index: 9999;
+
+  box-shadow:
+
+    0 10px 30px rgba(0,0,0,0.35);
+
+  scrollbar-width: thin;
+
+}
+
+/* individual options */
+
+.ui-menu-item-wrapper {
+
+  color: rgba(255,255,255,0.92);
+
+  padding: 10px 14px;
+
+  border-radius: 10px;
+
+  transition:
+
+    background 0.18s ease,
+
+    color 0.18s ease;
+
+}
+
+/* hover/focus */
+
+.ui-state-active,
+
+.ui-menu-item-wrapper:hover {
+
+  background: rgba(168, 85, 247, 0.22) !important;
+
+  border: none !important;
+
+  color: white !important;
+
+}
+
+/* scrollbar */
+
+.ui-autocomplete::-webkit-scrollbar {
+
+  width: 8px;
+
+}
+
+.ui-autocomplete::-webkit-scrollbar-thumb {
+
+  background: rgba(255,255,255,0.18);
+
+  border-radius: 10px;
+
+}

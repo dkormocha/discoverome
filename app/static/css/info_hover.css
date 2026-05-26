@@ -1,0 +1,26 @@
+.tooltip-container {
+  position: relative;
+  display: inline-block;
+}
+
+.Extra-Text {
+  border-radius: 15px;
+  display: none;
+  position: absolute;
+  top: -150px;
+  left: 50px;
+  width: 280px;
+  background-color: #f7fafa;
+  color: #000;
+  border: 2px solid #dfdfdf;
+  padding: 15px;
+  font-size: 14px;
+  z-index:10;
+  white-space: normal;
+}
+
+.tooltip-container:hover .Extra-Text {
+  display: block;
+}
+
+

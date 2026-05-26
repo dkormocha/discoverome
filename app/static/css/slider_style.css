@@ -1,0 +1,21 @@
+#slider,
+#slider-pocket_vol,
+#slider-drug_score,
+#slider-distance,
+#slider-access,
+#slider-promis {
+  width: 75%;
+  margin-top: 20px;
+}
+
+.noUi-target[disabled] {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.slider-left {
+  margin-right: 20px;
+}
+
+  /* --purple-hi:    #a855f7;      
+  --purple-lo:    #7c3aed;  */

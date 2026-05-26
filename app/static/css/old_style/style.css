@@ -1,0 +1,164 @@
+.center {
+    margin: auto;
+    width: 60%;
+    padding: 10px;
+  }
+
+.marg {
+    margin: 100px 0 50px 0;
+   
+}
+
+
+html, body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    display: table;
+}
+
+
+
+.footer {
+  display: table-row;
+  height: 0;
+  color: white;
+  height: 150px;
+  background: linear-gradient(to right, rgba(0, 127, 123, 0.85), rgba(0, 127, 123, 0));
+}
+
+
+
+/* html { background-color: #FAFCFD; }  */
+/*
+body {
+    /min-height: 100vh;/
+    max-width: 1500px;
+    background-color: #FBFFFE; 
+    margin: 0 auto;
+    box-shadow: 0px 0px 15px rgb(123, 121, 121)
+}
+*/
+
+.less {
+    overflow: hidden;
+    height: 4.5em;
+}
+
+
+ hr {
+    background-color: #007F7B;
+    margin-bottom: 50px;
+ }
+
+h1 {
+    color: white;
+    font-size: 3em;
+    font-family: 'Lobster';
+    text-align: center;
+    margin: 25px;
+}
+
+p {
+    font-size: 1.25em
+}
+
+.table-wrapper {
+    display: flex;
+    justify-content: space-between;
+  }
+  
+.table-wrapper table {
+    width: 100%;
+}
+  
+
+.wider-container {
+    max-width: 1400px; 
+  }
+
+#myViewer{
+    width:800px;
+    height: 500px;
+    position:relative;
+}
+
+.red-bg {
+    background-color: red;
+  }
+  
+  .green-bg {
+    background-color: green;
+  }
+
+
+  .wrap-text {
+    max-width: 50%; /* Adjust width as needed */
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+
+    .icon {
+    height: 2em;
+    vertical-align: middle;
+    filter: brightness(0) invert(1);
+    }
+
+    .icon-search {
+    height: 1.5em;
+    vertical-align: middle;
+    }
+
+
+    .nav-link {
+    color: white;
+    }
+
+
+    .zoom-in:hover {
+        transform: scale(1.15);
+    }
+
+    .nav_custom {
+        background: linear-gradient(to right, rgba(0, 127, 123, 0.85), rgba(0, 127, 123, 0));
+        width: 95%; 
+        border-radius: 30px; 
+        margin-top: 20px;
+
+    }
+
+    .nav-button-custom {
+        position: absolute;
+        right: 10px;
+        top: 45%;
+        transform: translateY(-50%);
+        border: none;
+        background: transparent;
+        padding: 0;
+    }
+
+
+        .compound-hover {
+        position: relative;
+        cursor: pointer;
+        display: inline-block;
+    }
+
+    .compound-hover .compound-image {
+        display: none;
+        position: absolute;
+        top: 20px;
+        left: 0;
+        z-index: 10;
+        width: 150px;
+        border: 1px solid #ccc;
+        background: white;
+        padding: 5px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .compound-hover:hover .compound-image {
+        display: block;
+    }
