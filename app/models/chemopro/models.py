@@ -11,8 +11,7 @@ import uuid
 from sqlalchemy_utils import UUIDType
 from sqlalchemy.sql import text
 
-from extensions import db, migrate
-
+from app.extensions import db, migrate
 
 class Residue(db.Model):
     __tablename__ = 'residues'

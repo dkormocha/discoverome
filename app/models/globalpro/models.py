@@ -12,12 +12,10 @@ import uuid
 from sqlalchemy_utils import UUIDType
 from sqlalchemy.sql import text
 
-from extensions import db, migrate
-
+from app.extensions import db, migrate
 
 
 class GpProtein(db.Model):
-    __bind_key__ = 'globalproteomics'
     __tablename__ = 'gpproteins'
     
     uniprot = db.Column(db.String(), primary_key = True)
@@ -35,7 +33,6 @@ class GpProtein(db.Model):
     
 
 class GpProteinSynonym(db.Model):
-    __bind_key__ = 'globalproteomics'
     __tablename__ = 'gpproteinsynonyms'
 
     id = db.Column(UUIDType, server_default = text("uuid_generate_v4()"), primary_key = True, unique = True)
@@ -46,7 +43,6 @@ class GpProteinSynonym(db.Model):
     gpprotein = relationship("GpProtein", back_populates = "gpsynonyms") 
 
 class GpCompoundTreatment(db.Model):
-    __bind_key__ = 'globalproteomics'
     __tablename__ = 'gpcompoundtreatments'
 
     id = db.Column(UUIDType, server_default = text("uuid_generate_v4()"), primary_key = True, unique = True)    
@@ -78,7 +74,6 @@ class GpCompoundTreatment(db.Model):
     gpcompound = relationship("GpCompound", foreign_keys = [compound_id]) #both compound and probe are compounds so need separate foreign keys defined
 
 class GpPlex(db.Model):
-    __bind_key__ = 'globalproteomics'
     __tablename__ = 'gpplexs'
 
     id = db.Column(db.String(), primary_key = True)
@@ -91,7 +86,6 @@ class GpPlex(db.Model):
     foldchanges = relationship("FoldChange",  back_populates = "gpplex")
 
 class GpExperiment(db.Model):
-    __bind_key__ = 'globalproteomics'
     __tablename__ = 'gpexperiments'
 
     id = db.Column(db.String(), primary_key = True)
@@ -101,7 +95,6 @@ class GpExperiment(db.Model):
        
 
 class GpCellType(db.Model):
-    __bind_key__ = 'globalproteomics'
     __tablename__ = 'gpcelltypes'
 
     id = db.Column(UUIDType, server_default = text("uuid_generate_v4()"), primary_key = True, unique = True)
@@ -112,7 +105,6 @@ class GpCellType(db.Model):
     gpcompoundtreatments = relationship("GpCompoundTreatment", back_populates = "gpcelltype")
 
 class GpCompound(db.Model):
-    __bind_key__ = 'globalproteomics'
     __tablename__ = 'gpcompounds'
 
     id = db.Column(db.String(), primary_key = True)
@@ -126,7 +118,6 @@ class GpCompound(db.Model):
     )
 
 class GpIntensityReading(db.Model):
-    __bind_key__ = 'globalproteomics'
     __tablename__ = 'gpintensityreadings'
     
     id = db.Column(UUIDType, server_default = text("uuid_generate_v4()"), primary_key = True, unique = True)
@@ -144,7 +135,6 @@ class GpIntensityReading(db.Model):
     gpprotein = relationship("GpProtein", back_populates = "gpintensityreadings")
     
 class FoldChange(db.Model):
-    __bind_key__ = 'globalproteomics'
     __tablename__ = 'foldchanges'
 
     id = db.Column(UUIDType, server_default = text("uuid_generate_v4()"), primary_key = True, unique = True)
@@ -167,7 +157,6 @@ class FoldChange(db.Model):
 
 
 class PathwayList(db.Model):
-    __bind_key__ = 'globalproteomics'
     __tablename__ = 'pathwaylists'
 
     id = db.Column(UUIDType, server_default = text("uuid_generate_v4()"), primary_key = True, unique = True)
@@ -181,7 +170,6 @@ class PathwayList(db.Model):
 
 
 class ProteinToPathway(db.Model):
-    __bind_key__ = 'globalproteomics'
     __tablename__ = 'protein2pathway'
 
     id = db.Column(UUIDType, server_default = text("uuid_generate_v4()"), primary_key = True, unique = True)
