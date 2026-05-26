@@ -17,7 +17,8 @@ import uuid
 from rdkit import Chem
 from rdkit.Chem import Draw
 import statistics as stat
-from app.models import CompetitionRatio, Protein, Residue, CompoundTreatment, Compound, CellType, Experiment, IntensityReading
+from app.models.chemopro.models import *
+from app.models.globalpro.models import *
 
 from scipy.stats import ttest_ind
 
