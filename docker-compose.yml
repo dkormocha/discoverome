@@ -1,0 +1,36 @@
+services:
+
+  # PostgreSQL database
+
+  db:
+
+    image: postgres:13
+
+    restart: always
+
+    container_name: discoveromedb
+
+    environment:
+
+      - POSTGRES_USER=postgres
+
+      - POSTGRES_PASSWORD=postgres
+
+      - POSTGRES_DB=discoveromedb
+
+    ports:
+
+      - "6543:5432"
+
+    volumes:
+
+      - db:/var/lib/postgresql/data
+
+      - ./data:/data
+
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
+
+
+volumes:
+
+  db:
