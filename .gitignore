@@ -2,3 +2,4 @@
 default_settings.py
 __pycache__
 node_modules/
+.env
