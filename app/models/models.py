@@ -37,7 +37,7 @@ class ProteinSynonym(db.Model):
     __tablename__ = "protein_synonyms"
     __table_args__ = {"schema": "core"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column( UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
     protein_id = db.Column(db.String, ForeignKey("core.proteins.uniprot"))
     synonym = db.Column(db.String)
@@ -53,12 +53,16 @@ class Compound(db.Model):
     id = db.Column(db.String, primary_key=True)
     smiles = db.Column(db.String, index=True)
     image = db.Column(db.String, index=True)
-
+    compoundtreatments = relationship(
+        "CompoundTreatment",
+        back_populates="compound"
+    )
+    
 class CellType(db.Model):
     __tablename__ = "celltypes"
     __table_args__ = {"schema": "core"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
     name = db.Column(db.String)
     depmapid = db.Column(db.String)
     description = db.Column(db.String)
@@ -89,13 +93,13 @@ class CompoundTreatment(db.Model):
     __tablename__ = "compoundtreatments"
     __table_args__ = {"schema": "core"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
     plex_id = db.Column(db.String, ForeignKey("core.plexes.id"))
     samplename = db.Column(db.String)
 
     compound_id = db.Column(db.String, ForeignKey("core.compounds.id"), index=True)
-    celltype_id = db.Column(UUIDType, ForeignKey("core.celltypes.id"))
+    celltype_id = db.Column(UUID(as_uuid=True), ForeignKey("core.celltypes.id"))
 
     tmtchannel = db.Column(db.String)
 
@@ -126,7 +130,7 @@ class Residue(db.Model):
     __tablename__ = "residues"
     __table_args__ = {"schema": "chemoproteomics"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
     uniprot = db.Column(db.String, ForeignKey("core.proteins.uniprot"), index=True)
     position = db.Column(db.Integer)
@@ -145,7 +149,7 @@ class ResidueList(db.Model):
     __tablename__ = 'residuelists'
     __table_args__ = {"schema": "chemoproteomics"}
 
-    id = db.Column(UUIDType, server_default = text("uuid_generate_v4()"), primary_key = True, unique = True)
+    id = db.Column(UUID(as_uuid=True), server_default = text("uuid_generate_v4()"), primary_key = True, unique = True)
     name = db.Column(db.String())
     description = db.Column(db.String())
 
@@ -155,16 +159,25 @@ class ResidueToList(db.Model):
     __tablename__ = 'list2residue'
     __table_args__ = {"schema": "chemoproteomics"}
 
-    id = db.Column(UUIDType, server_default = text("uuid_generate_v4()"), primary_key = True, unique = True)
-    residue_id = db.Column(UUIDType, ForeignKey("residues.id"), index = True)
-    residuelist_id = db.Column(UUIDType, ForeignKey("residuelists.id"))
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True, unique=True)
+
+    residue_id = db.Column(
+        UUID(as_uuid=True),
+        ForeignKey("chemoproteomics.residues.id"),
+        index=True
+    )
+
+    residuelist_id = db.Column(
+        UUID(as_uuid=True),
+        ForeignKey("chemoproteomics.residuelists.id")
+    )
     
 class ResidueFeature(db.Model):
      __tablename__ = 'residuefeatures'
      __table_args__ = {"schema": "chemoproteomics"}
 
-     id = db.Column(UUIDType, server_default = text("uuid_generate_v4()"), primary_key = True, unique = True)
-     residue_id = db.Column(UUIDType, ForeignKey("residues.id"), index = True)
+     id = db.Column(UUID(as_uuid=True), server_default = text("uuid_generate_v4()"), primary_key = True, unique = True)
+     residue_id = db.Column(UUID(as_uuid=True), ForeignKey("chemoproteomics.residues.id"), index = True)
      description = db.Column(db.String(), index = True)
      source = db.Column(db.String(), index = True)
 
@@ -190,11 +203,11 @@ class IntensityReading(db.Model):
     __tablename__ = "intensityreadings"
     __table_args__ = {"schema": "chemoproteomics"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
     plex_id = db.Column(db.String, ForeignKey("core.plexes.id"), index=True)
-    compoundtreatment_id = db.Column(UUIDType, ForeignKey("core.compoundtreatments.id"), index=True)
-    residue_id = db.Column(UUIDType, ForeignKey("chemoproteomics.residues.id"), index=True)
+    compoundtreatment_id = db.Column(UUID(as_uuid=True), ForeignKey("core.compoundtreatments.id"), index=True)
+    residue_id = db.Column(UUID(as_uuid=True), ForeignKey("chemoproteomics.residues.id"), index=True)
 
     scan = db.Column(db.String, index=True)
     value = db.Column(db.Float)
@@ -205,32 +218,36 @@ class IntensityReading(db.Model):
 
     UniqueConstraint("plex_id", "compoundtreatment_id", "scan", "residue_id")
 
-    plex = relationship("Plex")
-    compoundtreatment = relationship("CompoundTreatment")
-    residue = relationship("Residue", back_populates="intensityreadings")
+    plex = relationship("Plex", back_populates = "intensityreadings")
+    compoundtreatment = relationship("CompoundTreatment", back_populates = "intensityreadings")
+    residue = relationship("Residue", back_populates = "intensityreadings")
 
 
 class CompetitionRatio(db.Model):
     __tablename__ = "competitionratios"
     __table_args__ = {"schema": "chemoproteomics"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
     plex_id = db.Column(db.String, ForeignKey("core.plexes.id"), index=True)
-    compoundtreatment_id = db.Column(UUIDType, ForeignKey("core.compoundtreatments.id"), index=True)
-    residue_id = db.Column(UUIDType, ForeignKey("chemoproteomics.residues.id"), index=True)
+    compoundtreatment_id = db.Column(UUID(as_uuid=True), ForeignKey("core.compoundtreatments.id"), index=True)
+    residue_id = db.Column(UUID(as_uuid=True), ForeignKey("chemoproteomics.residues.id"), index=True)
 
     scan = db.Column(db.String, index=True)
     cr = db.Column(db.Float)
-    control_rsd = db.Column(db.Float)
-    p_value = db.Column(db.Float)
 
-    group_id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"))
+    control_rsd = db.Column(db.Float(), index = True) #Relative SD of the control samples (DMSO)
+    display_flag = db.Column(db.Boolean(), default=False, nullable=False)
+    multimapper = db.Column(db.Boolean(), default=False, nullable=False)
+    group_id = db.Column(UUID(as_uuid=True), default=uuid.uuid4)
+    group_cr = db.Column(db.Float(), index = True)
+    p_value = db.Column(db.Float(), index= True)
+    replicate_no = db.Column(db.Float(), index = True)
 
     UniqueConstraint("plex_id", "compoundtreatment_id", "scan")
 
-    plex = relationship("Plex")
-    compoundtreatment = relationship("CompoundTreatment")
+    plex = relationship("Plex", back_populates = "competitionratios")
+    compoundtreatment = relationship("CompoundTreatment", back_populates = "competitionratios")
     residue = relationship("Residue", back_populates="competitionratios")
 
 
@@ -240,10 +257,10 @@ class FoldChange(db.Model):
     __tablename__ = "foldchanges"
     __table_args__ = {"schema": "proteomics"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
     plex_id = db.Column(db.String, ForeignKey("core.plexes.id"), index=True)
-    compoundtreatment_id = db.Column(UUIDType, ForeignKey("core.compoundtreatments.id"), index=True)
+    compoundtreatment_id = db.Column(UUID(as_uuid=True), ForeignKey("core.compoundtreatments.id"), index=True)
     protein_id = db.Column(db.String, ForeignKey("core.proteins.uniprot"), index=True)
 
     scan = db.Column(db.String)
@@ -260,10 +277,10 @@ class ProteinIntensityReading(db.Model):
     __tablename__ = "protein_intensityreadings"
     __table_args__ = {"schema": "proteomics"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
     plex_id = db.Column(db.String, ForeignKey("core.plexes.id"), index=True)
-    compoundtreatment_id = db.Column(UUIDType, ForeignKey("core.compoundtreatments.id"), index=True)
+    compoundtreatment_id = db.Column(UUID(as_uuid=True), ForeignKey("core.compoundtreatments.id"), index=True)
     protein_id = db.Column(db.String, ForeignKey("core.proteins.uniprot"), index=True)
 
     scan = db.Column(db.String)
@@ -290,10 +307,10 @@ class StructureChain(db.Model):
     __tablename__ = "structurechains"
     __table_args__ = {"schema": "structure"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
     structure_id = db.Column(db.String, ForeignKey("structure.structures.id"))
-    chain_id = db.Column(UUIDType, ForeignKey("structure.structurechains.id"))
+    chain_id = db.Column(UUID(as_uuid=True), ForeignKey("structure.structurechains.id"))
     uniprot_id = db.Column(db.String, ForeignKey("core.proteins.uniprot"))
 
     UniqueConstraint("structure_id", "chain")
@@ -306,11 +323,11 @@ class StructureResidue(db.Model):
     __tablename__ = "structureresidues"
     __table_args__ = {"schema": "structure"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
     structure_id = db.Column(db.String, ForeignKey("structure.structures.id"))
-    chain_id = db.Column(UUIDType, ForeignKey("structure.structurechains.id"))
-    residue_id = db.Column(UUIDType, ForeignKey("chemoproteomics.residues.id"))
+    chain_id = db.Column(UUID(as_uuid=True), ForeignKey("structure.structurechains.id"))
+    residue_id = db.Column(UUID(as_uuid=True), ForeignKey("chemoproteomics.residues.id"))
 
     pdb_position = db.Column(db.String(), index = True) # Position from PDB file
     confidence = db.Column(db.Float()) #AF2 confidence
@@ -336,7 +353,7 @@ class Ligand(db.Model):
     __tablename__ = "ligands"
     __table_args__ = {"schema": "structure"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
     structure_id = db.Column(db.String, ForeignKey("structure.structures.id"), index=True)
 
@@ -360,10 +377,10 @@ class LigandResidueDistance(db.Model):
     __tablename__ = "ligand_residue_distances"
     __table_args__ = {"schema": "structure"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
-    ligand_id = db.Column(UUIDType, ForeignKey("structure.ligands.id"))
-    structureresidue_id = db.Column(UUIDType, ForeignKey("structure.structureresidues.id"))
+    ligand_id = db.Column(UUID(as_uuid=True), ForeignKey("structure.ligands.id"))
+    structureresidue_id = db.Column(UUID(as_uuid=True), ForeignKey("structure.structureresidues.id"))
 
     distance = db.Column(db.Float, index=True)
 
@@ -377,10 +394,10 @@ class PocketResidue(db.Model):
     __tablename__ = "pocket_residues"
     __table_args__ = {"schema": "structure"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
-    pocket_id = db.Column(UUIDType, ForeignKey("structure.pockets.id"), index=True)
-    structureresidue_id = db.Column(UUIDType, ForeignKey("structure.structureresidues.id"), index=True)
+    pocket_id = db.Column(UUID(as_uuid=True), ForeignKey("structure.pockets.id"), index=True)
+    structureresidue_id = db.Column(UUID(as_uuid=True), ForeignKey("structure.structureresidues.id"), index=True)
 
     UniqueConstraint("pocket_id", "structureresidue_id")
 
@@ -389,7 +406,7 @@ class Pocket(db.Model):
     __tablename__ = "pockets"
     __table_args__ = {"schema": "structure"}
 
-    id = db.Column(UUIDType, server_default=text("uuid_generate_v4()"), primary_key=True)
+    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
     structure_id = db.Column(db.String, ForeignKey("structure.structures.id"), index=True)
 
