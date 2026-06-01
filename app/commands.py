@@ -17,8 +17,8 @@ import uuid
 from rdkit import Chem
 from rdkit.Chem import Draw
 import statistics as stat
-from app.models.chemopro.models import *
-from app.models.globalpro.models import *
+from app.models import *
+
 
 from scipy.stats import ttest_ind
 
@@ -33,7 +33,7 @@ databp = Blueprint("data", __name__)
 def experiment_import(datafile, sampletable, logfile, drop_all):
     """Imports an SLC-ABPP data file and sample sheet"""
 
-    from models.chemopro import db, Protein, Residue, CompoundTreatment, Compound, CellType, Experiment, IntensityReading, Plex
+    from app.models import db, Protein, Residue, CompoundTreatment, Compound, CellType, Experiment, IntensityReading, Plex
 
     logging.basicConfig(
         filename=logfile,
@@ -391,7 +391,7 @@ def experiment_import(datafile, sampletable, logfile, drop_all):
 def sbio_import(dataroot, logfile, drop_all):
     """Imports discoverome structural biology information"""
 
-    from models.chemopro import db, Protein, Residue, Structure, StructureChain, StructureResidue, Ligand, LigandResidueDistance
+    from app.models import db, Protein, Residue, Structure, StructureChain, StructureResidue, Ligand, LigandResidueDistance
 
     logging.basicConfig(
         filename=logfile,
@@ -529,7 +529,7 @@ def sbio_import(dataroot, logfile, drop_all):
 def sbio_import(dataroot, logfile, residuetype, drop_all):
     """Imports discoverome structural biology information"""
 
-    from models.chemopro import db, Protein, Residue, Structure, StructureChain, StructureResidue, Ligand, LigandResidueDistance
+    from app.models import db, Protein, Residue, Structure, StructureChain, StructureResidue, Ligand, LigandResidueDistance
 
     logging.basicConfig(
         filename=logfile,
@@ -634,7 +634,7 @@ def sbio_import(dataroot, logfile, residuetype, drop_all):
 def sbio_import(dataroot, logfile, residuetype, drop_all):
     """Imports discoverome structural biology information"""
 
-    from models.chemopro import db, Protein, Residue, Structure, StructureChain, StructureResidue, Ligand, LigandResidueDistance
+    from app.models import db, Protein, Residue, Structure, StructureChain, StructureResidue, Ligand, LigandResidueDistance
 
     logging.basicConfig(
         filename=logfile,
@@ -777,7 +777,7 @@ def sbio_import(dataroot, logfile, residuetype, drop_all):
 def sbio_import(dataroot, siftsroot, logfile, drop_all):
     """Imports discoverome pocket information"""
 
-    from models.chemopro import db, Structure, StructureChain, StructureResidue, Pocket, PocketResidue
+    from app.models import db, Structure, StructureChain, StructureResidue, Pocket, PocketResidue
  
     logging.basicConfig(
         filename=logfile,
@@ -917,7 +917,7 @@ def sbio_import(dataroot, siftsroot, logfile, drop_all):
 def ligand_import(datafile, logfile, drop_all):
     """Imports PDB ligand information"""
 
-    from models.chemopro import db, Ligand
+    from app.models import db, Ligand
  
     logging.basicConfig(
         filename=logfile,
@@ -958,7 +958,7 @@ def ligand_import(datafile, logfile, drop_all):
 def protein_data_import(proteinfile, logfile, drop_all):
     "Import protein synonyms and the position of all residues"
 
-    from models.chemopro import db, ProteinSynonym, Protein, Residue
+    from app.models import db, ProteinSynonym, Protein, Residue
 
     logging.basicConfig(
         filename = logfile,
@@ -1020,7 +1020,7 @@ def protein_data_import(proteinfile, logfile, drop_all):
 def smiles_import(smilefile, logfile):
     "Import smiles string to compound table"
 
-    from models.chemopro import db, Compound
+    from app.models import db, Compound
 
     logging.basicConfig(
         filename = logfile,
@@ -1052,7 +1052,7 @@ def smiles_import(smilefile, logfile):
 def smiles_import(logfile):
     "Calculate images from SMILES, save into folder and import path to compound table"
 
-    from models.chemopro import db, Compound
+    from app.models import db, Compound
 
     logging.basicConfig(
         filename = logfile,
@@ -1092,7 +1092,7 @@ def smiles_import(logfile):
 def target_list_import(file, listname, description, logfile): # Function takes in file, name of list and description of list
     "Import target list data"
 
-    from models.chemopro import db, TargetList, ProteinToList, Protein
+    from app.models import db, TargetList, ProteinToList, Protein
     
     logging.basicConfig(
         filename = logfile,
@@ -1129,7 +1129,7 @@ def target_list_import(file, listname, description, logfile): # Function takes i
 def residue_list_import(file, listname, description, logfile): # Function takes in file, name of list and description of list
     "Import residue list data"
 
-    from models.chemopro import db, ResidueList, ResidueToList, Residue
+    from app.models import db, ResidueList, ResidueToList, Residue
     
     logging.basicConfig(
         filename = logfile,
@@ -1163,7 +1163,7 @@ def residue_list_import(file, listname, description, logfile): # Function takes 
 def ensembl_import(file, logfile):
     "Import ensembl id for uniprot ids"
     
-    from models.chemopro import db, Protein, ProteinSynonym
+    from app.models import db, Protein, ProteinSynonym
     
     logging.basicConfig(
         filename=logfile,
@@ -1202,7 +1202,7 @@ def ensembl_import(file, logfile):
 def residue_feature_import(proteinfile, logfile):
     "Import UniProt residue features"
 
-    from models.chemopro import db, Protein, Residue, ResidueFeature
+    from app.models import db, Protein, Residue, ResidueFeature
 
     logging.basicConfig(
         filename = logfile,
@@ -1321,7 +1321,7 @@ def residue_feature_import(proteinfile, logfile):
 def delete_plex(plexid, logfile, dry_run):
     """Imports discoverome structural biology information"""
 
-    from models.chemopro import db, Plex, CompetitionRatio, IntensityReading, CompoundTreatment
+    from app.models import db, Plex, CompetitionRatio, IntensityReading, CompoundTreatment
 
     logging.basicConfig(
         filename=logfile,
@@ -1370,7 +1370,7 @@ def delete_plex(plexid, logfile, dry_run):
 def external_compound_data(crfile, comfile, logfile):
     "Import external data to populate compound treatment and competition ratio table"
     
-    from models.chemopro import db, Protein, Residue, Plex, Compound, CompoundTreatment, CompetitionRatio, Experiment, CellType
+    from app.models import db, Protein, Residue, Plex, Compound, CompoundTreatment, CompetitionRatio, Experiment, CellType
     
     logging.basicConfig(
         filename=logfile,
@@ -1585,7 +1585,7 @@ def external_compound_data(crfile, comfile, logfile):
 def external_compound_data(mrfile, logfile):
     "Command to check the percentage of cysteine resiudes not in the database due to outdated uniprot dataset used in the Kuljanin dataset"
     
-    from models.chemopro import db, Residue
+    from app.models import db, Residue
     
     logging.basicConfig(
         filename=logfile,
@@ -1635,7 +1635,7 @@ def external_compound_data(mrfile, logfile):
 def gpprotein_data_import(proteinfile, organism, logfile, drop_all):
     "Import protein synonyms and the position of all residues"
 
-    from models.globalpro import db, GpProteinSynonym, GpProtein
+    from app.models import db, GpProteinSynonym, GpProtein
 
     logging.basicConfig(
         filename = logfile,
@@ -1686,7 +1686,7 @@ def gpprotein_data_import(proteinfile, organism, logfile, drop_all):
 def gpensembl_import(file, logfile, drop_all):
     "Import ensembl id for uniprot ids"
     
-    from models.globalpro import db, GpProtein, GpProteinSynonym
+    from app.models import db, GpProtein, GpProteinSynonym
     
     logging.basicConfig(
         filename=logfile,
@@ -1731,7 +1731,7 @@ def gpensembl_import(file, logfile, drop_all):
 def create_tables():
     "creating all tables"
 
-    from models.globalpro import db, FoldChange, GpIntensityReading, GpCompound, GpCellType, GpExperiment, GpPlex, GpCompoundTreatment
+    from app.models import db, FoldChange, GpIntensityReading, GpCompound, GpCellType, GpExperiment, GpPlex, GpCompoundTreatment
 
     print("***Creating all while testing***")
     db.create_all()
@@ -1742,7 +1742,7 @@ def create_tables():
 def create_tables():
     "creating all tables"
 
-    from models.chemopro import db, Protein, Residue, CompoundTreatment, Compound, \
+    from app.models import db, Protein, Residue, CompoundTreatment, Compound, \
     CellType, Experiment, IntensityReading, Plex, TargetList, ProteinToList, \
     ProteinSynonym, Compound, CompetitionRatio, Structure, StructureChain, StructureResidue, \
     Ligand, LigandResidueDistance, PocketResidue, Pocket, ResidueList, ResidueToList, ResidueFeature, \
@@ -1760,7 +1760,7 @@ def create_tables():
 def gp_experiment_import(datafile, sampletable, organism, logfile, drop_all):
     """Imports GP data file and sample sheet"""
 
-    from models.chemopro import db, GpProtein, GpCompoundTreatment, GpCompound, GpCellType, GpExperiment, GpIntensityReading, GpPlex, FoldChange
+    from app.models import db, GpProtein, GpCompoundTreatment, GpCompound, GpCellType, GpExperiment, GpIntensityReading, GpPlex, FoldChange
 
     logging.basicConfig(
         filename=logfile,
@@ -2068,7 +2068,7 @@ def gp_experiment_import(datafile, sampletable, organism, logfile, drop_all):
 def delete_plex(plexid, logfile, dry_run):
     """Imports discoverome structural biology information"""
 
-    from models.globalpro import db, GpPlex, FoldChange, GpIntensityReading, GpCompoundTreatment
+    from app.models import db, GpPlex, FoldChange, GpIntensityReading, GpCompoundTreatment
 
     logging.basicConfig(
         filename=logfile,
@@ -2116,7 +2116,7 @@ def delete_plex(plexid, logfile, dry_run):
 def smiles_import(smilefile, logfile):
     "Import smiles string to compound table"
 
-    from models.globalpro import db, GpCompoundTreatment, GpCompound
+    from app.models import db, GpCompoundTreatment, GpCompound
 
     logging.basicConfig(
         filename = logfile,
@@ -2170,7 +2170,7 @@ def smiles_import(smilefile, logfile):
 def smiles_import(logfile):
     "Calculate images from SMILES, save into folder and import path to compound table"
     
-    from models.globalpro import db, GpCompound
+    from app.models import db, GpCompound
 
     logging.basicConfig(
         filename = logfile,
@@ -2216,7 +2216,7 @@ def smiles_import(logfile):
 def pathway_import(file, dbname, organism, description, logfile): # Function takes in file, name of list and description of list
     "Import pathway list data"
 
-    from models.globalpro import db, PathwayList, GpProtein, ProteinToPathway
+    from app.models import db, PathwayList, GpProtein, ProteinToPathway
     
     logging.basicConfig(
         filename = logfile,
@@ -2279,7 +2279,7 @@ def remove_compound_data(compoundid, logfile, dry_run):
     Cascade remove experiment data for compound IDs matching a pattern.
     """
 
-    from models.globalpro import ( db, Compound, CompoundTreatment, CompetitionRatio, IntensityReading, Compound_cr_fifteen, Compound_cr_four)
+    from app.models import ( db, Compound, CompoundTreatment, CompetitionRatio, IntensityReading, Compound_cr_fifteen, Compound_cr_four)
 
     logging.basicConfig(
         filename=logfile,
