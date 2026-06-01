@@ -6,21 +6,21 @@ services:
     env_file:
       - .env
     ports:
-      - "6543:5432"
+      - "6544:5432"
     volumes:
       - db:/var/lib/postgresql/data
 
-  web:
-    build: .
-    restart: always
-    depends_on:
-      - db
-    env_file:
-      - .env
-    ports:
-      - "7656:7656"
-    volumes:
-      - .:/app
+  # web:
+  #   build: .
+  #   restart: always
+  #   depends_on:
+  #     - db
+  #   env_file:
+  #     - .env
+  #   ports:
+  #     - "6969:6969"
+  #   volumes:
+  #     - .:/app
 
 volumes:
   db:
