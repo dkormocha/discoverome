@@ -1,19 +1,28 @@
 import os
 from flask import Flask
 from .extensions import db, migrate
+from .config import DevelopmentConfig, ProductionConfig, TestingConfig
+
 
 def create_app():
+
     app = Flask(__name__)
 
-    app.config.from_object('app.default_settings')
-    app.config.from_envvar('DISCOVEROME_SETTINGS')
+    env = os.getenv("APP_ENV", "development")
 
-    try:
-        os.makedirs(app.instance_path)
-    except OSError:
-        pass
+    config_map = {
+        "development": DevelopmentConfig,
+        "production": ProductionConfig,
+        "testing": TestingConfig,
+    }
+
+    app.config.from_object(config_map[env])
 
     db.init_app(app)
     migrate.init_app(app, db)
+
+    # register blueprints
+    from app.commands import databp
+    app.register_blueprint(databp)
 
     return app
