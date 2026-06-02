@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+{% block page_title %}Discoverome{% endblock %}
+
+{% block content %}
+
+{% block extra_css %}
+<link rel="stylesheet"
+      href="{{ url_for('static', filename='css/slider_style.css') }}">
+{% endblock %}
+
+{% include 'flash_msg.html' %}
+
+
+<!-- Particle canvas -->
+<canvas id="bg-canvas"></canvas>
+
+
+  <!-- ── Header ── -->
+  <header class="do-header">
+
+  <img src="{{ url_for('static', filename='images/do.png') }}"
+      alt="Discoverome logo"
+      class="center">
+
+    <div class="do-tagline">Target Discovery  · Chemoproteomics · Global Proteomics · Transcriptomics</div>
+  </header>
+
+  <!-- ── Search card ── -->
+  <div class="search-card">
+    <form action="/" method="post" id="main-form">
+
+      <div class="search-bar">
+        <input type="text" id="auto" name="sym"
+               placeholder="Search for a protein or compound…" autocomplete="on">
+        <button type="submit" aria-label="Search">
+          <svg viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+      </div>
+
+      <button type="button" class="adv-toggle" id="adv-search-btn">
+        <svg class="chevron" viewBox="0 0 24 24">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+        Advanced filters
+      </button>
+
+      <!-- ── Advanced panel ── -->
+      <div id="adv-search" class="adv-panel">
+
+        <div class="adv-grid">
+
+          <div class="adv-field">
+            <div class="adv-label">Residue Type</div>
+            <select class="adv-select" id="resTypeSelect">
+              <option value="CYS" {% if res_type == 'CYS' %} selected {% endif %}>CYS — Cysteine</option>
+              <option value="LYS" {% if res_type == 'LYS' %} selected {% endif %}>LYS — Lysine</option>
+            </select>
+          </div>
+
+          <div class="adv-field">
+            <div class="adv-label">Competition Ratio
+              <div class="check-wrap">
+                <input type="checkbox" id="crCheckbox" onclick="toggleSlider('slider','crCheckbox')">
+                <label for="crCheckbox">Enable</label>
+              </div>
+            </div>
+            <div id="slider"></div>
+          </div>
+
+          <div class="adv-field">
+            <div class="adv-label">Pocket Volume
+              <div class="check-wrap">
+                <input type="checkbox" id="pocketVolCheckbox" onclick="toggleSlider('slider-pocket_vol','pocketVolCheckbox')">
+                <label for="pocketVolCheckbox">Enable</label>
+              </div>
+            </div>
+            <div id="slider-pocket_vol"></div>
+          </div>
+
+          <div class="adv-field">
+            <div class="adv-label">Drug Score
+              <div class="check-wrap">
+                <input type="checkbox" id="drugScoreCheckbox" onclick="toggleSlider('slider-drug_score','drugScoreCheckbox')">
+                <label for="drugScoreCheckbox">Enable</label>
+              </div>
+            </div>
+            <div id="slider-drug_score"></div>
+          </div>
+
+          <div class="adv-field">
+            <div class="adv-label">Distance
+              <div class="check-wrap">
+                <input type="checkbox" id="distanceCheckbox" onclick="toggleSlider('slider-distance','distanceCheckbox')">
+                <label for="distanceCheckbox">Enable</label>
+              </div>
+            </div>
+            <div id="slider-distance"></div>
+          </div>
+
+          <div class="adv-field">
+            <div class="adv-label">Residue Accessibility
+              <div class="check-wrap">
+                <input type="checkbox" id="accessCheckbox" onclick="toggleSlider('slider-access','accessCheckbox')">
+                <label for="accessCheckbox">Enable</label>
+              </div>
+            </div>
+            <div id="slider-access"></div>
+          </div>
+
+          <div class="adv-field">
+            <div class="adv-label">Compound Promiscuity
+              <div class="check-wrap">
+                <input type="checkbox" id="promisCheckbox" onclick="toggleSlider('slider-promis','promisCheckbox')">
+                <label for="promisCheckbox">Enable</label>
+              </div>
+            </div>
+            <div id="slider-promis"></div>
+          </div>
+
+        </div><!-- /.adv-grid -->
+
+        <div class="mode-switcher">
+          <button type="button" class="mode-tab active" id="btn-protein" onclick="setMode('protein')">Protein list</button>
+          <button type="button" class="mode-tab"        id="btn-pathway" onclick="setMode('pathway')">Pathway</button>
+        </div>
+
+        <div class="mode-input-wrap" id="proteinForm">
+          <textarea id="proteinlist" rows="3"
+                    placeholder="Enter one or more proteins: P59632, Q13546, P08543"></textarea>
+        </div>
+
+        <div class="mode-input-wrap" id="targetForm" style="display:none">
+          <input type="text" id="target"
+                 placeholder="Enter a target list name: NecroptosisPathway">
+        </div>
+
+        <button type="button" class="adv-run-btn" id="adv_search">Run advanced search →</button>
+
+      </div><!-- /.adv-panel -->
+    </form>
+  </div><!-- /.search-card -->
+
+
+
+
+{% endblock %}
