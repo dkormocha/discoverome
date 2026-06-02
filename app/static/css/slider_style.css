@@ -5,7 +5,8 @@
 #slider-access,
 #slider-promis {
   width: 75%;
-  margin-top: 20px;
+  margin-top: 20%;
+  margin-bottom: 20%;
 }
 
 .noUi-target[disabled] {
@@ -15,6 +16,49 @@
 
 .slider-left {
   margin-right: 20px;
+}
+
+:root {
+
+  --purple-hi: #a855f7;
+
+  --purple-lo: #7c3aed;
+
+}
+
+
+
+.noUi-connect {
+
+  background: linear-gradient(
+
+    135deg,
+
+  #c084fc 0%,
+
+    var(--purple-hi) 50%,
+
+    var(--purple-lo) 100%
+
+  );
+
+}
+
+.noUi-handle {
+    width: 20px;
+    height: 20px;
+    right: -10px;
+    top: -8px;
+
+    border-radius: 50%;
+    background: white;
+    border: none;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+.noUi-handle::before,
+.noUi-handle::after {
+    display: none;
 }
 
   /* --purple-hi:    #a855f7;      
