@@ -27,19 +27,21 @@ class Protein(db.Model):
     uniprot = db.Column(db.String, primary_key=True)
     description = db.Column(db.String)
     symbol = db.Column(db.String, index=True)
+    organism = db.Column(db.String, index=True)
 
     residues = relationship("Residue", back_populates="protein")
     synonyms = relationship("ProteinSynonym", back_populates="protein")
-
     chains = relationship("StructureChain", back_populates="protein")
+    lists = relationship("TargetList", secondary="core.list2protein", back_populates="proteins", uselist=True, overlaps="proteins")
+    pathways = relationship("PathwayList", secondary="core.protein2pathway", back_populates="proteins", uselist=True, overlaps="proteins")
 
 class ProteinSynonym(db.Model):
-    __tablename__ = "protein_synonyms"
+    __tablename__ = "proteinsynonyms"
     __table_args__ = {"schema": "core"}
 
     id = db.Column( UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
-    protein_id = db.Column(db.String, ForeignKey("core.proteins.uniprot"))
+    uniprot = db.Column(db.String, ForeignKey("core.proteins.uniprot"))
     synonym = db.Column(db.String)
     type = db.Column(db.String)
 
@@ -53,11 +55,15 @@ class Compound(db.Model):
     id = db.Column(db.String, primary_key=True)
     smiles = db.Column(db.String, index=True)
     image = db.Column(db.String, index=True)
+    # compoundtreatments = relationship(
+    #     "CompoundTreatment",
+    #     back_populates="compound"
+    # )
     compoundtreatments = relationship(
-        "CompoundTreatment",
-        back_populates="compound"
+        "CompoundTreatment", 
+        back_populates = "compound", 
+        primaryjoin = "and_(Compound.id ==CompoundTreatment.compound_id)" # Needs defining because the CompoundTreatment table also has a key for the probe
     )
-    
 class CellType(db.Model):
     __tablename__ = "celltypes"
     __table_args__ = {"schema": "core"}
@@ -66,6 +72,7 @@ class CellType(db.Model):
     name = db.Column(db.String)
     depmapid = db.Column(db.String)
     description = db.Column(db.String)
+    compoundtreatments = relationship("CompoundTreatment", back_populates = "celltype")
 
 class Experiment(db.Model):
     __tablename__ = "experiments"
@@ -73,33 +80,39 @@ class Experiment(db.Model):
 
     id = db.Column(db.String, primary_key=True)
     description = db.Column(db.String)
+    plexs = relationship("Plex", back_populates = "experiment")
 
 
 
 
 class Plex(db.Model):
-    __tablename__ = "plexes"
+    __tablename__ = "plexs"
     __table_args__ = {"schema": "core"}
 
     id = db.Column(db.String, primary_key=True)
     experiment_id = db.Column(db.String, ForeignKey("core.experiments.id"))
     description = db.Column(db.String)
 
-    experiment = relationship("Experiment", backref="plexes")
-
+    experiment = relationship("Experiment", back_populates = "plexs")
+    compoundtreatments = relationship("CompoundTreatment", back_populates = "plex", overlaps = "intensityreadings")
+    intensityreadings = relationship("IntensityReading",  back_populates = "plex")
+    competitionratios = relationship("CompetitionRatio",  back_populates = "plex")
 
 
 class CompoundTreatment(db.Model):
     __tablename__ = "compoundtreatments"
-    __table_args__ = {"schema": "core"}
+    __table_args__ = (
+        UniqueConstraint("plex_id", "samplename"),
+        {"schema": "core"}
+    )
 
-    id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
+    id = db.Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    plex_id = db.Column(db.String, ForeignKey("core.plexes.id"))
-    samplename = db.Column(db.String)
+    plex_id = db.Column(db.String, ForeignKey("core.plexs.id"), nullable=False)
+    samplename = db.Column(db.String, nullable=False)
 
-    compound_id = db.Column(db.String, ForeignKey("core.compounds.id"), index=True)
-    celltype_id = db.Column(UUID(as_uuid=True), ForeignKey("core.celltypes.id"))
+    compound_id = db.Column(db.String, ForeignKey("core.compounds.id"), nullable=False, index=True)
+    celltype_id = db.Column(UUID(as_uuid=True), ForeignKey("core.celltypes.id"), nullable=False)
 
     tmtchannel = db.Column(db.String)
 
@@ -110,13 +123,40 @@ class CompoundTreatment(db.Model):
     timeunits = db.Column(db.String)
 
     temperature = db.Column(db.Float)
+
+    probe_id = db.Column(db.String, ForeignKey("core.compounds.id"), index=True)
+
+    probeconcentration = db.Column(db.Float)
+    probeconcentrationunits = db.Column(db.String)
+
+    probetime = db.Column(db.Float)
+    probetimeunits = db.Column(db.String)
+
+    concentration_two = db.Column(db.Float)
+    concentration_three = db.Column(db.Float)
+    organism = db.Column(db.String)
+    project = db.Column(db.String)
+    data_acq = db.Column(db.String)
+
+    comments = db.Column(db.String)
     isreference = db.Column(db.Boolean, index=True)
 
-    UniqueConstraint("plex_id", "samplename")
+    plex = relationship("Plex", back_populates="compoundtreatments")
+    celltype = relationship("CellType", back_populates="compoundtreatments")
 
-    plex = relationship("Plex", backref="compoundtreatments")
-    compound = relationship("Compound")
-    celltype = relationship("CellType")
+    intensityreadings = relationship("IntensityReading", overlaps = "experiment", back_populates = "compoundtreatment")
+    competitionratios = relationship("CompetitionRatio", overlaps = "experiment", back_populates = "compoundtreatment")
+
+    compound = relationship(
+        "Compound",
+        foreign_keys=[compound_id],
+        back_populates="compoundtreatments"
+    )
+
+    probe = relationship(
+        "Compound",
+        foreign_keys=[probe_id]
+    )
 
 
 
@@ -139,11 +179,14 @@ class Residue(db.Model):
     UniqueConstraint("uniprot", "position")
 
     protein = relationship("Protein", back_populates="residues")
+    structureresidues = relationship("StructureResidue", back_populates = "residue")
 
     intensityreadings = relationship("IntensityReading", back_populates="residue")
     competitionratios = relationship("CompetitionRatio", back_populates="residue")
-    lists = relationship( "ResidueList", secondary="chemoproteomics.list2residue", back_populates="residues")
-
+    lists = relationship(
+        "ResidueToList",
+        back_populates="residue"
+    )
 
 class ResidueList(db.Model):
     __tablename__ = 'residuelists'
@@ -153,7 +196,9 @@ class ResidueList(db.Model):
     name = db.Column(db.String())
     description = db.Column(db.String())
 
-    residues = relationship("Residue", secondary = 'list2residue', back_populates = "lists", uselist = True, overlaps = "lists")
+    residues = relationship(
+    "ResidueToList",
+    back_populates="residuelist")
 
 class ResidueToList(db.Model):
     __tablename__ = 'list2residue'
@@ -171,7 +216,10 @@ class ResidueToList(db.Model):
         UUID(as_uuid=True),
         ForeignKey("chemoproteomics.residuelists.id")
     )
-    
+    residue = relationship("Residue", back_populates="lists")
+
+    residuelist = relationship("ResidueList", back_populates="residues")
+
 class ResidueFeature(db.Model):
      __tablename__ = 'residuefeatures'
      __table_args__ = {"schema": "chemoproteomics"}
@@ -205,7 +253,7 @@ class IntensityReading(db.Model):
 
     id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
-    plex_id = db.Column(db.String, ForeignKey("core.plexes.id"), index=True)
+    plex_id = db.Column(db.String, ForeignKey("core.plexs.id"), index=True)
     compoundtreatment_id = db.Column(UUID(as_uuid=True), ForeignKey("core.compoundtreatments.id"), index=True)
     residue_id = db.Column(UUID(as_uuid=True), ForeignKey("chemoproteomics.residues.id"), index=True)
 
@@ -229,7 +277,7 @@ class CompetitionRatio(db.Model):
 
     id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
-    plex_id = db.Column(db.String, ForeignKey("core.plexes.id"), index=True)
+    plex_id = db.Column(db.String, ForeignKey("core.plexs.id"), index=True)
     compoundtreatment_id = db.Column(UUID(as_uuid=True), ForeignKey("core.compoundtreatments.id"), index=True)
     residue_id = db.Column(UUID(as_uuid=True), ForeignKey("chemoproteomics.residues.id"), index=True)
 
@@ -259,18 +307,23 @@ class FoldChange(db.Model):
 
     id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
-    plex_id = db.Column(db.String, ForeignKey("core.plexes.id"), index=True)
+    plex_id = db.Column(db.String, ForeignKey("core.plexs.id"), index=True)
     compoundtreatment_id = db.Column(UUID(as_uuid=True), ForeignKey("core.compoundtreatments.id"), index=True)
     protein_id = db.Column(db.String, ForeignKey("core.proteins.uniprot"), index=True)
 
     scan = db.Column(db.String)
     foldchange = db.Column(db.Float)
     p_value = db.Column(db.Float)
-
     replicate_no = db.Column(db.Float)
+    group_id = db.Column(UUID(as_uuid=True), index=True)
+    no_peptides = db.Column(db.Float)
+    no_unique_peptides = db.Column(db.Float)
 
     UniqueConstraint("plex_id", "compoundtreatment_id", "scan")
 
+    protein = relationship("Protein")
+    compoundtreatment = relationship("CompoundTreatment")
+    plex = relationship("Plex")
 
 
 class ProteinIntensityReading(db.Model):
@@ -279,12 +332,56 @@ class ProteinIntensityReading(db.Model):
 
     id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
-    plex_id = db.Column(db.String, ForeignKey("core.plexes.id"), index=True)
+    plex_id = db.Column(db.String, ForeignKey("core.plexs.id"), index=True)
     compoundtreatment_id = db.Column(UUID(as_uuid=True), ForeignKey("core.compoundtreatments.id"), index=True)
     protein_id = db.Column(db.String, ForeignKey("core.proteins.uniprot"), index=True)
 
     scan = db.Column(db.String)
     value = db.Column(db.Float)
+
+
+# CORE SCHEMA - LISTS AND PATHWAYS
+
+class TargetList(db.Model):
+    __tablename__ = 'targetlists'
+    __table_args__ = {"schema": "core"}
+
+    id = db.Column(UUID(as_uuid=True), server_default=text("uuid_generate_v4()"), primary_key=True, unique=True)
+    name = db.Column(db.String())
+    description = db.Column(db.String())
+
+    proteins = relationship("Protein", secondary="core.list2protein", back_populates="lists", uselist=True, overlaps="lists")
+
+
+class ProteinToList(db.Model):
+    __tablename__ = 'list2protein'
+    __table_args__ = {"schema": "core"}
+
+    id = db.Column(UUID(as_uuid=True), server_default=text("uuid_generate_v4()"), primary_key=True, unique=True)
+    protein_id = db.Column(db.String, ForeignKey("core.proteins.uniprot"))
+    targetlist_id = db.Column(UUID(as_uuid=True), ForeignKey("core.targetlists.id"))
+
+
+class PathwayList(db.Model):
+    __tablename__ = 'pathwaylists'
+    __table_args__ = {"schema": "core"}
+
+    id = db.Column(UUID(as_uuid=True), server_default=text("uuid_generate_v4()"), primary_key=True, unique=True)
+    name = db.Column(db.String())
+    description = db.Column(db.String())
+    database = db.Column(db.String())
+    organism = db.Column(db.String())
+
+    proteins = relationship("Protein", secondary="core.protein2pathway", back_populates="pathways", uselist=True, overlaps="pathways")
+
+
+class ProteinToPathway(db.Model):
+    __tablename__ = 'protein2pathway'
+    __table_args__ = {"schema": "core"}
+
+    id = db.Column(UUID(as_uuid=True), server_default=text("uuid_generate_v4()"), primary_key=True, unique=True)
+    protein_id = db.Column(db.String, ForeignKey("core.proteins.uniprot"))
+    pathway_id = db.Column(UUID(as_uuid=True), ForeignKey("core.pathwaylists.id"))
 
 
 #STRUCUTRE SCHEMA
@@ -310,7 +407,7 @@ class StructureChain(db.Model):
     id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
 
     structure_id = db.Column(db.String, ForeignKey("structure.structures.id"))
-    chain_id = db.Column(UUID(as_uuid=True), ForeignKey("structure.structurechains.id"))
+    chain = db.Column(db.String(), index = True)
     uniprot_id = db.Column(db.String, ForeignKey("core.proteins.uniprot"))
 
     UniqueConstraint("structure_id", "chain")
@@ -345,7 +442,7 @@ class StructureResidue(db.Model):
     residue = relationship("Residue", back_populates = "structureresidues")
 
     liganddistances = relationship("LigandResidueDistance",back_populates = "residue",uselist = True)
-    pockets = relationship("Pocket",secondary = 'structure.pocket_residues',back_populates = "residues",uselist = True)
+    pockets = relationship("Pocket",secondary = 'structure.pocket2residue',back_populates = "residues",uselist = True)
 
 
 
@@ -374,7 +471,7 @@ class Ligand(db.Model):
     residuedistances = relationship("LigandResidueDistance", back_populates = "ligand")
 
 class LigandResidueDistance(db.Model):
-    __tablename__ = "ligand_residue_distances"
+    __tablename__ = "residue2ligand"
     __table_args__ = {"schema": "structure"}
 
     id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
@@ -391,7 +488,7 @@ class LigandResidueDistance(db.Model):
 
 
 class PocketResidue(db.Model):
-    __tablename__ = "pocket_residues"
+    __tablename__ = "pocket2residue"
     __table_args__ = {"schema": "structure"}
 
     id = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
@@ -425,4 +522,4 @@ class Pocket(db.Model):
     UniqueConstraint("structure_id", "pocket_id")
 
     structure = relationship("Structure", back_populates = "pockets")
-    residues = relationship("StructureResidue", secondary = 'structure.pocket_residues', back_populates = "pockets",uselist = True, overlaps = "pockets")
+    residues = relationship("StructureResidue", secondary = 'structure.pocket2residue', back_populates = "pockets",uselist = True, overlaps = "pockets")
