@@ -55,9 +55,9 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   window.toggleSlider = function(sliderId, checkboxId) {
-    const slider = document.getElementById(sliderId);
+    const slider   = document.getElementById(sliderId);
     const checkbox = document.getElementById(checkboxId);
-
+    if (!slider || !checkbox) return;
     slider.toggleAttribute("disabled", !checkbox.checked);
   };
 
