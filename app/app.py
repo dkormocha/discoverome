@@ -326,617 +326,255 @@ def serve_pqr_file(subpath, pocket_structure):
 
 @app.route('/protein/<symbol>')
 def protein_search(symbol):
-    protein = None
-    ps = [] # List of protein synonms 
-    data = {} # Dictionary containing cr value for each given compound at a position 
-    data_labels = {} # Dictionary containing features/information about given each compound at a position
-    celltypes = db.session.query(CellType).all() # SQL query for all celltypes 
-    celltype = request.args.get('celltype') # Get request for different cell types
-    position_data = {} # Dictionary to show pocket, ligand and residue feature data on heatmap
-    protein_structure = {} # Protein structure dictionary containing pocket id and path to pqr file
-    btn_position = {} # Dictionary for protein strucutres and all CYS positions
+    from collections import defaultdict
 
+    celltype     = request.args.get('celltype')
+    show_all     = bool(request.args.get('all_res'))
+    residue_type = request.args.get('residue_type') if request.args.get('residue_type') in ('CYS', 'LYS') else 'CYS'
 
-    data_type = request.args.get('data_type')
+    protein = db.session.query(Protein).filter(Protein.symbol == symbol).first()
+    if protein is None:
+        return redirect(url_for('index'))
 
-
-
-    protein = db.session.query(Protein).filter(Protein.symbol == symbol).first()  
-    protein_synonym = db.session.query(ProteinSynonym).filter(ProteinSynonym.uniprot == protein.uniprot).all() 
+    celltypes    = db.session.query(CellType).all()
+    ps           = list({s.synonym for s in db.session.query(ProteinSynonym).filter(ProteinSynonym.uniprot == protein.uniprot).all()})
+    description  = protein.description
     protein_name = f'{protein.uniprot[1:3]}/{protein.uniprot}/{protein.uniprot}_pockets.pqr/{protein.uniprot}'
 
+    residues = db.session.query(Residue).filter(
+        Residue.uniprot == protein.uniprot, Residue.type == residue_type
+    ).order_by(Residue.position).all()
 
-    if protein is None: 
-        return redirect(url_for('index'))
-    
-    else:
-        description = protein.description
-        for synonyms in protein_synonym:
-            ps.append(synonyms.synonym)
-        ps = list(set(ps))
+    if not residues:
+        return render_template('protein_search.html', protein=protein, description=description,
+            ps=ps, data_labels={}, data={}, celltypes=celltypes, selected_residue_type=residue_type,
+            selected_celltype=celltype, position_data={}, protein_structure={},
+            protein_name=protein_name, btn_position={})
 
+    residue_ids = [r.id for r in residues]
 
+    # 1. Pocket structure list
+    pocket_list = [p.Pocket.structure_id for p in (
+        db.session.query(Pocket, PocketResidue, Residue, StructureResidue)
+        .join(PocketResidue, Pocket.id == PocketResidue.pocket_id)
+        .join(StructureResidue, PocketResidue.structureresidue_id == StructureResidue.id)
+        .join(Residue, StructureResidue.residue_id == Residue.id)
+        .filter(Residue.uniprot == protein.uniprot, Residue.type == residue_type)
+        .distinct(Pocket.structure_id).all()
+    )]
 
+    # 2. Promiscuity maps
+    cr4_map  = {r.compound_id: r.count for r in db.session.query(Compound_cr_four).all()}
+    cr15_map = {r.compound_id: r.count for r in db.session.query(Compound_cr_fifteen).all()}
 
+    # 3. All CRs for this protein in one query
+    cr_q = (
+        db.session.query(CompetitionRatio, CompoundTreatment, CellType, Compound, Plex)
+        .filter(
+            CompetitionRatio.residue_id.in_(residue_ids),
+            CompetitionRatio.display_flag == True,
+            CompetitionRatio.multimapper == False,
+            CompetitionRatio.control_rsd <= 30,
+            CompoundTreatment.id == CompetitionRatio.compoundtreatment_id,
+            CompoundTreatment.isreference == False,
+            CellType.id == CompoundTreatment.celltype_id,
+            Compound.id == CompoundTreatment.compound_id,
+            Plex.id == CompoundTreatment.plex_id,
+        )
+    )
+    if celltype:
+        cr_q = cr_q.filter(CellType.name == celltype)
+    cr_rows = cr_q.all()
 
-    selected_residue_type = request.args.get('residue_type')  # Convert to uppercase for consistency
-    
-    # Check if the user selected 'CYS' or 'LYS', otherwise set the default to 'CYS'
-    if selected_residue_type in ['CYS', 'LYS']:
-        residue_type = selected_residue_type
-    else:
-        residue_type = 'CYS'  # Default to 'CYS' if the selection is not valid
+    cr_by_residue = defaultdict(list)
+    for row in cr_rows:
+        cr_by_residue[row.CompetitionRatio.residue_id].append(row)
 
-    # Query the database using the selected residue type and celltype
-    if residue_type == 'LYS':
-        # For LYS data type, we don't need to filter by celltype, so exclude the celltype filter
-        residues = db.session.query(Residue).filter(Residue.uniprot == protein.uniprot, Residue.type == residue_type).all()
-    else:
-        # For CYS data type, include the celltype filter
-        residues = db.session.query(Residue).filter(Residue.uniprot == protein.uniprot, Residue.type == residue_type).all()
+    # 4. Best pocket per residue
+    pocket_by_residue = {}
+    for row in (
+        db.session.query(Residue, PocketResidue, Pocket, StructureResidue, Ligand, LigandResidueDistance)
+        .select_from(PocketResidue)
+        .join(Pocket)
+        .join(StructureResidue, PocketResidue.structureresidue_id == StructureResidue.id)
+        .join(Residue, StructureResidue.residue_id == Residue.id)
+        .outerjoin(LigandResidueDistance, StructureResidue.id == LigandResidueDistance.structureresidue_id)
+        .outerjoin(Ligand, LigandResidueDistance.ligand_id == Ligand.id)
+        .filter(Residue.id.in_(residue_ids), Residue.type == residue_type)
+        .order_by(Pocket.pocket_volume_MC.desc())
+        .all()
+    ):
+        rid = row[0].id
+        if rid not in pocket_by_residue:
+            pocket_by_residue[rid] = row
 
-        
+    # 5. Best ligand per residue (no pocket)
+    ligand_by_residue = {}
+    for row in (
+        db.session.query(Residue, StructureResidue, Ligand, LigandResidueDistance)
+        .filter(
+            Residue.id.in_(residue_ids),
+            Residue.type == residue_type,
+            StructureResidue.residue_id == Residue.id,
+            StructureResidue.id == LigandResidueDistance.structureresidue_id,
+            LigandResidueDistance.ligand_id == Ligand.id,
+        )
+        .order_by(Ligand.mw.desc())
+        .all()
+    ):
+        rid = row[0].id
+        if rid not in ligand_by_residue:
+            ligand_by_residue[rid] = row
 
-    # Query the database using the selected residue type
-    residues = db.session.query(Residue).filter(Residue.uniprot == protein.uniprot, Residue.type == residue_type).all()
+    # 6. Residue features
+    features_by_residue = defaultdict(list)
+    for f in db.session.query(ResidueFeature).filter(ResidueFeature.residue_id.in_(residue_ids)).all():
+        features_by_residue[f.residue_id].append(f)
 
+    # 7. Compound cache and btn_position
+    all_compound_ids = {row.CompoundTreatment.compound_id for row in cr_rows}
+    compound_cache = {c.id: c for c in db.session.query(Compound).filter(
+        Compound.id.in_(all_compound_ids)
+    ).all()} if all_compound_ids else {}
 
-    # residues = db.session.query(Residue).filter(Residue.uniprot == protein.uniprot, Residue.type == "CYS").all() # Search all residues of the protein with cys  
-    
-    
-    residues.sort(key = lambda x: x.position) 
+    protein_structure = {p: (p, f'{p[1:3]}/{p}/{p}_pockets.pqr') for p in pocket_list}
+
+    btn_position = {}
+    if pocket_list:
+        btn_map = defaultdict(set)
+        for sr, res, sc in (
+            db.session.query(StructureResidue, Residue, StructureChain)
+            .join(Residue, StructureResidue.residue_id == Residue.id)
+            .join(StructureChain, StructureResidue.chain_id == StructureChain.id)
+            .filter(
+                StructureResidue.structure_id.in_(pocket_list),
+                Residue.uniprot == protein.uniprot,
+                Residue.type == residue_type,
+            )
+            .all()
+        ):
+            btn_map[sr.structure_id].add((res.position, int(sr.pdb_position), sc.chain))
+        btn_position = {p: sorted(btn_map[p]) for p in pocket_list}
+
+    def parse_features(features):
+        src_list, des_list = [], []
+        for rf in features:
+            m = re.search(r'UniProt (.+)', rf.source)
+            if m:
+                src_list.append(m.group(1))
+            evidence = [s[11:-1] for s in re.findall(r'/evidence=".+?"', rf.description)]
+            note     = [s[6:-1]  for s in re.findall(r'/note=".+?"',     rf.description)]
+            li       = re.findall(r'/ligand="(.+?)";\s*/ligand_id="(.+?)";', rf.description)
+            li_str   = "; ".join(f"{l[0].upper()}; {l[1]}" for l in li)
+            des_list.append('; '.join(note + evidence + [li_str]))
+        return (
+            '~'.join(src_list) if src_list else "N/A",
+            '~'.join(des_list) if des_list else "N/A",
+        )
+
+    # Main loop: zero DB queries inside
+    data, data_labels, position_data = {}, {}, {}
     all_compounds = set()
 
-    all_pockets = (db.session.query(Pocket, PocketResidue, Residue, StructureResidue)
-                .join(PocketResidue, Pocket.id == PocketResidue.pocket_id)
-                .join(StructureResidue, PocketResidue.structureresidue_id == StructureResidue.id)
-                .join(Residue, StructureResidue.residue_id == Residue.id)
-                .filter(Residue.uniprot == protein.uniprot, Residue.type == residue_type )
-                .distinct(Pocket.structure_id)
-                .all())
+    for residue in residues:
+        position     = residue.position
+        comp_val     = cr_by_residue.get(residue.id, [])
+        pocket_row   = pocket_by_residue.get(residue.id)
+        ligand_row   = ligand_by_residue.get(residue.id)
+        res_features = features_by_residue.get(residue.id, [])
 
-    pocket_list = []
+        res_sources, res_des = parse_features(res_features) if res_features else (None, None)
 
-    for p in all_pockets:
-        pocket_list.append(p.Pocket.structure_id)
-
-    compound_cr_four = db.session.query(Compound_cr_four).all()
-    compound_cr_fifteen = db.session.query(Compound_cr_fifteen).all()
-
-    for residue in residues: 
-
-        position = residue.position
-
-        
-        data_type = request.args.get('data_type')
-
-        if data_type == 'kul_data':
-            plex_id = 'Kuljanin_plex'
+        if pocket_row:
+            pkt, sres, lig, lig_dist_row = pocket_row[2], pocket_row[3], pocket_row[4], pocket_row[5]
+            pocket_structure = pkt.structure_id
+            p_score, d_score = pkt.pocket_score, pkt.drug_score
+            pocket_vol  = round(pkt.pocket_volume_MC,   2) if pkt.pocket_volume_MC   else None
+            mean_con    = round(pkt.mean_confidence,    2) if pkt.mean_confidence    else None
+            medium_con  = round(pkt.median_confidence,  2) if pkt.median_confidence  else None
+            min_con     = round(pkt.min_confidence,     2) if pkt.min_confidence     else None
+            di_sulfide  = sres.in_disulfide
+            accessibility = round(sres.accessibility,  2) if sres.accessibility     else None
+            ligand_dist = round(lig_dist_row.distance,  2) if lig_dist_row           else None
+            lig_struId  = lig.structure_id if lig else None
+            lig_name    = lig.name         if lig else None
+            lig_mw      = round(lig.mw, 2) if lig and lig.mw else None
+            artefact    = lig.artefact     if lig else None
+            has_ld = lig_dist_row is not None
+            if has_ld and res_sources:   position_data[position] = 'Pocket Ligand and Residue Features'
+            elif has_ld:                 position_data[position] = 'Pocket Ligand'
+            elif res_sources:            position_data[position] = 'Pocket and Residue Features'
+            else:                        position_data[position] = 'Pocket'
         else:
-            plex_id = None  # Use None if there is no specific Plex ID for data_type != 'kul_data'
-
-        if celltype:
-            comp_val = db.session.query(CompetitionRatio, CompoundTreatment, CellType, Compound, Plex).filter(
-                CompetitionRatio.residue_id == residue.id, CompetitionRatio.display_flag == True, CompetitionRatio.multimapper == False,
-                CompetitionRatio.control_rsd <= 30
-                ).filter(
-                CellType.id == CompoundTreatment.celltype_id, CellType.name == celltype).filter(
-                CompoundTreatment.id == CompetitionRatio.compoundtreatment_id, CompoundTreatment.isreference == False).filter(
-                Compound.id == CompoundTreatment.compound_id).filter(
-                Plex.id == CompoundTreatment.plex_id, Plex.id != 'Kuljanin_plex' if plex_id is None else Plex.id == plex_id
-                ).all()
-        else:
-            comp_val = db.session.query(CompetitionRatio, CompoundTreatment, CellType, Compound, Plex).filter(
-                CompetitionRatio.residue_id == residue.id, CompetitionRatio.display_flag == True, CompetitionRatio.multimapper == False,
-                CompetitionRatio.control_rsd <= 30
-                ).filter(
-                CellType.id == CompoundTreatment.celltype_id).filter(
-                CompoundTreatment.id == CompetitionRatio.compoundtreatment_id, CompoundTreatment.isreference == False).filter(
-                Compound.id == CompoundTreatment.compound_id).filter(
-                Plex.id == CompoundTreatment.plex_id, Plex.id != 'Kuljanin_plex' if plex_id is None else Plex.id == plex_id
-                ).all()
-
-        
-        pocket_residue = db.session.query(Residue, PocketResidue, Pocket, StructureResidue, Ligand, LigandResidueDistance)\
-            .select_from(PocketResidue)\
-            .join(Pocket)\
-            .join(StructureResidue, PocketResidue.structureresidue_id == StructureResidue.id)\
-            .join(Residue, StructureResidue.residue_id == Residue.id)\
-            .outerjoin(LigandResidueDistance, StructureResidue.id == LigandResidueDistance.structureresidue_id)\
-            .outerjoin(Ligand, LigandResidueDistance.ligand_id == Ligand.id)\
-            .filter(Residue.id == residue.id, Residue.type == residue_type)\
-            .order_by(Pocket.pocket_volume_MC.desc())\
-            .first()
-
-
-
-
-        residue_ligand = db.session.query(Residue, StructureResidue, Ligand, LigandResidueDistance)\
-            .filter(Residue.id == residue.id, Residue.type == residue_type,
-                    StructureResidue.residue_id == Residue.id,
-                    StructureResidue.id == LigandResidueDistance.structureresidue_id,
-                    LigandResidueDistance.ligand_id == Ligand.id)\
-            .order_by(Ligand.mw.desc())\
-            .first()
-    
-
-
-        residue_features= db.session.query(ResidueFeature).filter(ResidueFeature.residue_id == residue.id).all()
-
-
-
-
-        for cr in comp_val:
-            compound = cr.CompoundTreatment.compound_id
-            all_compounds.add(compound) # Add any compound for the given residue and cr to the set if not already in the set
-            smiles = cr.Compound.smiles
-            image = cr.Compound.image
-            cell_line = cr.CellType.name
-            p_value = cr.CompetitionRatio.p_value
-            replicate_no = cr.CompetitionRatio.replicate_no
-            
-            if p_value is None:
-                p_value = ''
-            else: 
-                p_value
-            
-
-            if replicate_no is None:
-                replicate_no = ''
-            else:
-                replicate_no
-
-                
-
-            cr4_hits = None
-            for hit in compound_cr_four:
-                if hit.compound_id == compound:
-                    cr4_hits = hit.count
-
-
-            cr15_hits = None
-            for hit in compound_cr_fifteen:
-                if hit.compound_id == compound:
-                    cr15_hits = hit.count
-                    
-
-            # List to save the resiude information from uniprot 'source' and 'description' 
-            res_sources = [] # example: 'ACT_SITE', 'MUTAGEN'
-            res_des = []
-            # If residue contains feature information then use regular expression to extract the relevant details
-            if residue_features:
-                for rf in residue_features:
-                    m = re.search(r'UniProt (.+)', rf.source)
-                    if m:
-                        res_sources.append(m.group(1))
-                    m = re.findall(r'/evidence=".+?"', rf.description)
-                    evidence = [s[11:-1] for s in m]
-                    m = re.findall(r'/note=".+?"', rf.description)
-                    note = [s[6:-1] for s in m]
-                    ligand_info = re.findall(r'/ligand="(.+?)";\s*/ligand_id="(.+?)";', rf.description)
-                    ligand_info_str = "; ".join(["{}; {}".format(l[0].upper(), l[1]) for l in ligand_info])
-                    res_des.append('; '.join(note + evidence + [ligand_info_str]))
-                res_sources = '~'.join(res_sources) if res_sources else "N/A"
-                res_des = '~'.join(res_des) if res_des else "N/A"
-            else:
-                res_sources = None
-                res_des = None
-
-            if res_sources is not None:
-                position_data[position] = 'Residue Features' #add a 'Residue Feature' tag if the residue position has residue information, this will show as a badge in the web app.
-
-            # Check if residue contains a pocket
-            if pocket_residue:
-                pocket_id = pocket_residue[2].pocket_id
-                pocket_structure = pocket_residue[2].structure_id
-                p_score = pocket_residue[2].pocket_score
-                d_score = pocket_residue[2].drug_score
-                pocket_vol = round(pocket_residue[2].pocket_volume_MC, 2)
-                mean_con = None
-                medium_con = None
-                min_con = None
-
-
-                # Check if the pocket contains a ligand, also check for ligand distance 
-                if pocket_residue[5] is not None: 
-                    if res_sources is not None:
-                        position_data[position] = 'Pocket Ligand and Residue Features' 
-                    else:
-                        position_data[position] = 'Pocket Ligand'
-
-                    ligand_dist = round(pocket_residue[5].distance, 2)
-                else:
-                    if res_sources is not None:
-
-                        position_data[position] = 'Pocket and Residue Features'
-                    else:
-                        position_data[position] = 'Pocket'
-
-                    ligand_dist = None
-
-
-                # If pocket has ligand, add ligand properties
-                if pocket_residue[4] is not None:
-                    lig_struId = pocket_residue[4].structure_id
-                    lig_name = pocket_residue[4].name
-                    artefact = pocket_residue[4].artefact
-                    if pocket_residue[4].mw is not None:
-                        lig_mw = round(pocket_residue[4].mw, 2)
-                    else:
-                        lig_mw = None  # or any other appropriate value
-                    artefact = pocket_residue[4].artefact
-                    
-                    for pocket in pocket_list:
-                        if pocket not in protein_structure:
-                            protein_structure[pocket] = {}
-                            
-                        pqr_all=  f'{pocket[1:3]}/{pocket}/{pocket}_pockets.pqr'
-
-                        protein_structure[pocket] = pocket, pqr_all
-                else:
-                    lig_struId = None
-                    lig_name = None
-                    lig_mw = None
-                    artefact = None
-
-                    for pocket in pocket_list:
-                        if pocket not in protein_structure:
-                            protein_structure[pocket] = {}
-                            
-                        pqr_all=  f'{pocket[1:3]}/{pocket}/{pocket}_pockets.pqr'
-
-                        protein_structure[pocket] = pocket, pqr_all
-
-
-
-
-                # Alphafold confidence score                
-                if pocket_residue[2].mean_confidence is not None:
-                    mean_con = round(pocket_residue[2].mean_confidence, 2)
-                if pocket_residue[2].median_confidence is not None:
-                    medium_con = round(pocket_residue[2].median_confidence, 2)
-                if pocket_residue[2].min_confidence is not None:
-                    min_con = round(pocket_residue[2].min_confidence, 2)                    
-                di_sulfide = pocket_residue[3].in_disulfide
-                accessibility = round(pocket_residue[3].accessibility, 2)
-
-                # position = int(residue.position)
-
-
-
-                if position not in data:
-                    data[position] = {}
-                data[position][compound] = round(cr.CompetitionRatio.group_cr, 2)
-                if position not in data_labels:
-                    data_labels[position] = {}
-                data_labels[position][compound] = (protein.uniprot, cell_line, smiles, image, pocket_structure, p_score, d_score, 
-                    pocket_vol, mean_con, medium_con, min_con, di_sulfide, accessibility, lig_struId, ligand_dist, lig_name, lig_mw, artefact, 
-                    res_sources, res_des, cr4_hits, cr15_hits, p_value,replicate_no )
-
-            else:
-    
-                # position = int(residue.position)
-
-                
-                ligand_dist = None
-                lig_struId = None
-                lig_name = None
-                lig_mw = None
-                artefact = None
-                di_sulfide = None
-
-                for pocket in pocket_list:
-                    if pocket not in protein_structure:
-                        protein_structure[pocket] = {}
-                        
-                    pqr_all=  f'{pocket[1:3]}/{pocket}/{pocket}_pockets.pqr'
-
-                    protein_structure[pocket] = pocket, pqr_all
-
-
-
-
-                if residue_ligand:
-                    if res_sources is not None:
-                        position_data[position] = 'Ligand and Residue Features'
-                    
-                    else:
-                        position_data[position] = 'Ligand'
-
-
-                    lig_struId = residue_ligand[2].structure_id
-                    ligand_dist = round(residue_ligand[3].distance, 2)
-                    lig_name = residue_ligand[2].name
-
-                    if residue_ligand[2].mw is not None:
-                        lig_mw = round(residue_ligand[2].mw, 2)
-                    else:
-                        lig_mw = '-'
-
-                    artefact = residue_ligand[2].artefact
-
-
-
-                if position not in data:
-                    data[position] = {}
-                data[position][compound] = round(cr.CompetitionRatio.group_cr, 2)
-                
-                if position not in data_labels:
-                    data_labels[position] = {}
-                data_labels[position][compound] = (protein.uniprot, cell_line, smiles, image, None, None, None, 
-                None, None, None, None, di_sulfide, None, lig_struId, ligand_dist, lig_name, lig_mw, artefact, res_sources, res_des, cr4_hits, cr15_hits, p_value, replicate_no)
-
-
-            # Add residue and compound data to blank values
-            for position in data.keys():
-                for compound in all_compounds:
-                    if compound not in data[position]:
-                        comp= db.session.query(Compound).filter(Compound.id == compound).first()
-                        smiles= comp.smiles
-                        image = comp.image
-                        data[position][compound] = None
-                        if position in data_labels and len(data_labels[position]) > 0:
-                            existing_label = list(data_labels[position].values())[0]
-                            if len(existing_label) >= 15:
-                                pocket_structure, p_score, d_score, pocket_vol, mean_con, medium_con, min_con, di_sulfide, accessibility, lig_struId, ligand_dist, lig_name, lig_mw, artefact, res_sources, res_des, cr4_hits, cr15_hits, p_value, replicate_no = existing_label[4:]
-                                data_labels[position][compound] = protein.uniprot, None, smiles, image, pocket_structure, p_score, d_score, pocket_vol, mean_con, medium_con, min_con, di_sulfide, accessibility, lig_struId, ligand_dist, lig_name, lig_mw, artefact, res_sources, res_des
-                            else:
-                                data_labels[position][compound] = protein.uniprot, None, smiles, image
-                        else:
-                            data_labels[position][compound] = protein.uniprot, None, smiles, image
-
-
-
-
-        for p in pocket_list:
-            if p not in btn_position: 
-                btn_position[p] = {}
-
- 
-                cys_positions = db.session.query(
-                        StructureResidue,
-                        Residue,
-                        StructureChain
-                    ).join(
-                        Residue, StructureResidue.residue_id == Residue.id
-                    ).join(
-                        StructureChain, StructureResidue.chain_id == StructureChain.id
-                    ).filter(
-                        StructureResidue.structure_id == p, Residue.uniprot == protein.uniprot, Residue.type == residue_type
-                    ).all()
-
-                btn_position[p] = sorted(list(set((residue.position, int(structure_residue.pdb_position), structure_chain.chain) 
-                                            for structure_residue, residue, structure_chain in cys_positions)))
-
-
-
-
-        # Show all residue, shows all CYS residues in the protein
-        if request.args.get('all_res'):
-            
-            position = int(residue.position)
-
-            placement_x = ['Compound']
-
-            pocket_residue = db.session.query(Residue, PocketResidue, Pocket, StructureResidue, Ligand, LigandResidueDistance)\
-                .select_from(PocketResidue)\
-                .join(Pocket)\
-                .join(StructureResidue, PocketResidue.structureresidue_id == StructureResidue.id)\
-                .join(Residue, StructureResidue.residue_id == Residue.id)\
-                .outerjoin(LigandResidueDistance, StructureResidue.id == LigandResidueDistance.structureresidue_id)\
-                .outerjoin(Ligand, LigandResidueDistance.ligand_id == Ligand.id)\
-                .filter(Residue.id == residue.id , Residue.type == residue_type)\
-                .order_by(Pocket.pocket_volume_MC.desc())\
-                .first()
-
-
-
-            residue_ligand = db.session.query(Residue, StructureResidue, Ligand, LigandResidueDistance)\
-                .filter(Residue.id == residue.id , Residue.type == residue_type,
-                        StructureResidue.residue_id == Residue.id,
-                        StructureResidue.id == LigandResidueDistance.structureresidue_id,
-                        LigandResidueDistance.ligand_id == Ligand.id)\
-                .order_by(Ligand.mw.desc())\
-                .first()
-        
-
-            residue_features= db.session.query(ResidueFeature).filter(ResidueFeature.residue_id == residue.id).all()
-
-         
-            res_sources = []
-            res_des = []
-
-            if residue_features:
-                for rf in residue_features:
-                    m = re.search(r'UniProt (.+)', rf.source)
-                    if m:
-                        res_sources.append(m.group(1))
-                    m = re.findall(r'/evidence=".+?"', rf.description)
-                    evidence = [s[11:-1] for s in m]
-                    m = re.findall(r'/note=".+?"', rf.description)
-                    note = [s[6:-1] for s in m]
-                    ligand_info = re.findall(r'/ligand="(.+?)";\s*/ligand_id="(.+?)";', rf.description)
-                    ligand_info_str = "; ".join(["{}; {}".format(l[0].upper(), l[1]) for l in ligand_info])
-                    res_des.append('; '.join(note + evidence + [ligand_info_str]))
-                res_sources = '~'.join(res_sources) if res_sources else "N/A"
-                res_des = '~'.join(res_des) if res_des else "N/A"
-            else:
-                res_sources = None
-                res_des = None
-
-
-    
-            if res_sources is not None:
+            pocket_structure = p_score = d_score = pocket_vol = None
+            mean_con = medium_con = min_con = di_sulfide = accessibility = None
+            lig_struId = ligand_dist = lig_name = lig_mw = artefact = None
+            if ligand_row:
+                rl = ligand_row
+                lig_struId  = rl[2].structure_id
+                ligand_dist = round(rl[3].distance, 2) if rl[3].distance else None
+                lig_name    = rl[2].name
+                lig_mw      = round(rl[2].mw, 2)      if rl[2].mw      else None
+                artefact    = rl[2].artefact
+                position_data[position] = 'Ligand and Residue Features' if res_sources else 'Ligand'
+            elif res_sources:
                 position_data[position] = 'Residue Features'
 
-            if pocket_residue:
+        struct_tuple = (
+            pocket_structure, p_score, d_score, pocket_vol,
+            mean_con, medium_con, min_con, di_sulfide, accessibility,
+            lig_struId, ligand_dist, lig_name, lig_mw, artefact,
+            res_sources, res_des,
+        )
 
-                pocket_id = pocket_residue[2].pocket_id
-                pocket_structure = pocket_residue[2].structure_id
-                p_score = pocket_residue[2].pocket_score
-                d_score = pocket_residue[2].drug_score
-                pocket_vol = round(pocket_residue[2].pocket_volume_MC, 2)
-                mean_con = None
-                medium_con = None
-                min_con = None
+        for cr in comp_val:
+            compound     = cr.CompoundTreatment.compound_id
+            all_compounds.add(compound)
+            data.setdefault(position, {})[compound] = round(cr.CompetitionRatio.group_cr, 2)
+            data_labels.setdefault(position, {})[compound] = (
+                protein.uniprot, cr.CellType.name,
+                cr.Compound.smiles, cr.Compound.image,
+                *struct_tuple,
+                cr4_map.get(compound), cr15_map.get(compound),
+                cr.CompetitionRatio.p_value or '',
+                cr.CompetitionRatio.replicate_no or '',
+            )
 
-                if pocket_residue[5] is not None:
+        if show_all:
+            data.setdefault(position, {})
+            data_labels.setdefault(position, {})
+            for compound in (all_compounds or ['Compound']):
+                if compound not in data[position]:
+                    comp = compound_cache.get(compound)
+                    data[position][compound] = None
+                    data_labels[position][compound] = (
+                        protein.uniprot, None,
+                        comp.smiles if comp else None,
+                        comp.image  if comp else None,
+                        *struct_tuple,
+                        None, None, None, None,
+                    )
 
-                    if res_sources is not None:
-                        position_data[position] = 'Pocket Ligand and Residue Features'
-                    else:
-                        position_data[position] = 'Pocket Ligand'
-
-                    ligand_dist = round(pocket_residue[5].distance, 2)
-                else:
-                    if res_sources is not None:
-
-                        position_data[position] = 'Pocket and Residue Features'
-                    else:
-                        position_data[position] = 'Pocket'
-
-                    ligand_dist = None
-
-                if pocket_residue[4] is not None:
-                    lig_struId = pocket_residue[4].structure_id
-                    lig_name = pocket_residue[4].name
-                    artefact = pocket_residue[4].artefact
-                    if pocket_residue[4].mw is not None:
-                        lig_mw = round(pocket_residue[4].mw, 2)
-                    else:
-                        lig_mw = None  # or any other appropriate value
-                    artefact = pocket_residue[4].artefact                    
-
-                    for pocket in pocket_list:
-                        if pocket not in protein_structure:
-                            protein_structure[pocket] = {}
-                            
-                        pqr_all=  f'{pocket[1:3]}/{pocket}/{pocket}_pockets.pqr'
-
-                        protein_structure[pocket] = pocket, pqr_all
-
-                else:
-                    lig_struId = None
-                    lig_name = None
-                    lig_mw = None
-                    artefact = None
-                    
-
-                    for pocket in pocket_list:
-                        if pocket not in protein_structure:
-                            protein_structure[pocket] = {}
-                            
-                        pqr_all=  f'{pocket[1:3]}/{pocket}/{pocket}_pockets.pqr'
-
-                        protein_structure[pocket] = pocket, pqr_all
-
-
-
-
-                if pocket_residue[2].mean_confidence is not None:
-                    mean_con = round(pocket_residue[2].mean_confidence, 2)
-                if pocket_residue[2].median_confidence is not None:
-                    medium_con = round(pocket_residue[2].median_confidence, 2)
-                if pocket_residue[2].min_confidence is not None:
-                    min_con = round(pocket_residue[2].min_confidence, 2)                    
-                di_sulfide = pocket_residue[3].in_disulfide
-                accessibility = round(pocket_residue[3].accessibility, 2)
-
-
-                if position not in data:
-                    data[position] = {}
-                if position not in data_labels:
-                    data_labels[position] = {}
-
-                compound_data = False
-                cr4_hits = None
-                cr15_hits = None
-                p_value = None
-                replicate_no = None
-                for compound in all_compounds:
-                    comp = db.session.query(Compound).filter(Compound.id == compound).first()
-                    if comp:
-                        compound_data = True
-                        smiles = comp.smiles
-                        image = comp.image
-                        if compound not in data[position]:
-                            data[position][compound] = None
-                            data_labels[position][compound] = (protein.uniprot, None, smiles, image, pocket_structure, p_score, d_score, pocket_vol, mean_con, medium_con, min_con, di_sulfide, accessibility, lig_struId, ligand_dist, lig_name, lig_mw, artefact, res_sources, res_des, cr4_hits, cr15_hits, p_value, replicate_no)
-
-                if not compound_data:  # If there is no compound data
-                    for placement in placement_x:
-                        if placement not in data[position]:
-                            data[position][placement] = None
-                            data_labels[position][placement] = (protein.uniprot, None, None, None, pocket_structure, p_score, d_score, pocket_vol, mean_con, medium_con, min_con, di_sulfide, accessibility, lig_struId, ligand_dist, lig_name, lig_mw, artefact, res_sources, res_des, cr4_hits, cr15_hits, p_value, replicate_no)
-            
-            else:
-
-                ligand_dist = None
-                lig_struId = None
-                lig_name = None
-                lig_mw = None
-                artefact = None
-                accessibility= None
-                di_sulfide = None
-                p_value = None
-                replicate_no = None
-                if residue_ligand:
-
-                    if res_sources is not None:
-                        position_data[position] = 'Ligand and Residue Features'
-                    
-                    else:
-                        position_data[position] = 'Ligand'
-
-
-
-                    if residue_ligand[2].structure_id is not None:
-                        lig_struId = residue_ligand[2].structure_id
-
-                    if residue_ligand[3].distance is not None:
-                        ligand_dist = round(residue_ligand[3].distance, 2)
-
-                    if residue_ligand[2].name is not None:
-                        lig_name = residue_ligand[2].name
-
-                    if residue_ligand[2].mw is not None:
-                        lig_mw = round(residue_ligand[2].mw, 2)
-
-                    if residue_ligand[2].artefact is not None:
-                        artefact = residue_ligand[2].artefact
-
-                if position not in data:
-                    data[position] = {}
-                if position not in data_labels:
-                    data_labels[position] = {}
-
-                compound_data = False
-                cr4_hits = None
-                cr15_hits = None
-                for compound in all_compounds:
-                    comp = db.session.query(Compound).filter(Compound.id == compound).first()
-                    if comp:
-                        compound_data = True
-                        smiles = comp.smiles
-                        image = comp.image
-                        if compound not in data[position]:
-                            data[position][compound] = None
-
-                            data_labels[position][compound] = (protein.uniprot, None, smiles, image, None, None, None, None, None, None, None, di_sulfide, accessibility, lig_struId, ligand_dist, lig_name, lig_mw, artefact, res_sources, res_des, cr4_hits, cr15_hits, p_value, replicate_no)
-
-                if not compound_data:  # If there is no compound data
-                    for placement in placement_x:
-                        if placement not in data[position]:
-                            data[position][placement] = None
-                            data_labels[position][placement] = (protein.uniprot, None, None, None, None, None, None, None, None, None, None, di_sulfide, accessibility, lig_struId, ligand_dist, lig_name, lig_mw, artefact, res_sources, res_des, cr4_hits, cr15_hits, p_value, replicate_no) 
-    # print(pocket_list)
-    # print(protein_structure)
-
-    # print(data)
+    if not show_all:
+        for position in list(data):
+            existing = next(iter(data_labels.get(position, {}).values()), None)
+            for compound in all_compounds:
+                if compound not in data[position]:
+                    comp = compound_cache.get(compound)
+                    data[position][compound] = None
+                    data_labels[position][compound] = (
+                        protein.uniprot, None,
+                        comp.smiles if comp else None,
+                        comp.image  if comp else None,
+                        *(existing[4:20] if existing and len(existing) >= 20 else ()),
+                    )
 
     return render_template('protein_search.html', protein=protein, description=description,
-        ps=ps, data_labels= data_labels, data=data,  celltypes=celltypes, selected_residue_type=residue_type,
-        selected_celltype=celltype, position_data=position_data, protein_structure=protein_structure, protein_name=protein_name, btn_position=btn_position )
+        ps=ps, data_labels=data_labels, data=data, celltypes=celltypes,
+        selected_residue_type=residue_type, selected_celltype=celltype,
+        position_data=position_data, protein_structure=protein_structure,
+        protein_name=protein_name, btn_position=btn_position)
+
 
 
  
