@@ -1,6 +1,6 @@
 from inspect import iscoroutinefunction
 from re import I
-from flask import render_template, request, redirect, url_for, g, jsonify, flash, send_file, send_from_directory
+from flask import render_template, request, redirect, url_for, g, jsonify, flash, send_file, send_from_directory, session
 from sqlalchemy.sql import func, or_
 from sqlalchemy import desc, nullslast, not_, asc
 from sqlalchemy.orm import joinedload
@@ -12,6 +12,8 @@ import json
 import math
 import plotly.graph_objects as go
 import os
+import requests as http_requests
+import ollama
 
 import plotly.express as px
 
@@ -729,9 +731,8 @@ def all_compounds():
 
     # Create a single query to fetch the hit count for each compound
     hit_query = db.session.query(
-            Compound.id, Residue.type, db.func.sum(
-                db.case(
-                    [(CompetitionRatio.group_cr >= 4, 1)],
+            Compound.id, Residue.type, db.func.sum(db.case(
+                    (CompetitionRatio.group_cr >= 4, 1),
                     else_=0
                 )
             ).label('hit_count')
@@ -1293,6 +1294,300 @@ def protein_compound_gp():
 
 
 
+
+
+
+
+#DiscoveromeGPT
+
+@app.route('/discoverome_gpt')
+def discoverome_gpt():
+    session.setdefault('chat_history', [])
+    return render_template('discoverome_gpt.html')
+
+
+def _find_proteins_in_message(message):
+    """Match tokens in message against protein symbols, UniProt IDs, and synonyms."""
+    tokens = list({t.upper() for t in re.findall(r'[A-Za-z][A-Za-z0-9\-]{1,}', message)})
+    if not tokens:
+        return []
+    proteins = (
+        db.session.query(Protein)
+        .filter(or_(Protein.symbol.in_(tokens), Protein.uniprot.in_(tokens)))
+        .limit(5)
+        .all()
+    )
+    if not proteins:
+        syns = (
+            db.session.query(ProteinSynonym)
+            .filter(ProteinSynonym.synonym.in_(tokens))
+            .limit(5)
+            .all()
+        )
+        proteins = [s.protein for s in syns if s.protein]
+    return list({p.uniprot: p for p in proteins}.values())
+
+
+def _get_compound_hits(uniprot, limit=15):
+    """Best compound hits for a protein with group_cr >= 4, one row per compound."""
+    rows = (
+        db.session.query(
+            CompoundTreatment.compound_id,
+            Residue.position,
+            Residue.type,
+            CellType.name.label('celltype'),
+            func.max(CompetitionRatio.group_cr).label('max_cr'),
+        )
+        .join(Residue, CompetitionRatio.residue_id == Residue.id)
+        .join(Protein, Residue.uniprot == Protein.uniprot)
+        .join(CompoundTreatment, CompetitionRatio.compoundtreatment_id == CompoundTreatment.id)
+        .join(CellType, CompoundTreatment.celltype_id == CellType.id)
+        .filter(
+            Protein.uniprot == uniprot,
+            CompetitionRatio.group_cr >= 4,
+            CompetitionRatio.display_flag == True,
+            CompetitionRatio.multimapper == False,
+            CompetitionRatio.control_rsd <= 30,
+            CompoundTreatment.compound_id != 'DMSO',
+        )
+        .group_by(CompoundTreatment.compound_id, Residue.position, Residue.type, CellType.name)
+        .order_by(func.max(CompetitionRatio.group_cr).desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            'compound': r.compound_id,
+            'position': r.position,
+            'residue_type': r.type,
+            'celltype': r.celltype,
+            'max_cr': round(r.max_cr, 2),
+        }
+        for r in rows
+    ]
+
+
+def _fetch_uniprot(uniprot_id):
+    """Fetch protein function, disease associations, and subcellular location from UniProt."""
+    try:
+        r = http_requests.get(
+            f'https://rest.uniprot.org/uniprotkb/{uniprot_id}',
+            params={'format': 'json'},
+            timeout=6,
+        )
+        if r.status_code != 200:
+            return {}
+        d = r.json()
+
+        name = (
+            d.get('proteinDescription', {})
+            .get('recommendedName', {})
+            .get('fullName', {})
+            .get('value', '')
+        )
+        functions = [
+            c['texts'][0]['value']
+            for c in d.get('comments', [])
+            if c.get('commentType') == 'FUNCTION' and c.get('texts')
+        ]
+        diseases = [
+            c.get('disease', {}).get('diseaseName', {}).get('value', '')
+            for c in d.get('comments', [])
+            if c.get('commentType') == 'DISEASE'
+        ]
+        subcell = list({
+            loc.get('location', {}).get('value', '')
+            for c in d.get('comments', [])
+            if c.get('commentType') == 'SUBCELLULAR LOCATION'
+            for loc in c.get('subcellularLocations', [])
+        })
+        # Ensembl gene ID for Open Targets
+        ensembl_gene = next(
+            (
+                prop['value']
+                for ref in d.get('uniProtKBCrossReferences', [])
+                if ref.get('database') == 'Ensembl'
+                for prop in ref.get('properties', [])
+                if prop.get('key') == 'GeneId'
+            ),
+            None,
+        )
+        return {
+            'name': name,
+            'function': ' '.join(functions)[:700],
+            'diseases': [dd for dd in diseases if dd][:6],
+            'subcellular_location': [s for s in subcell if s][:4],
+            'ensembl_gene': ensembl_gene,
+        }
+    except Exception:
+        return {}
+
+
+def _fetch_opentargets(ensembl_gene_id):
+    """Fetch disease associations and tractability from Open Targets using Ensembl gene ID."""
+    if not ensembl_gene_id:
+        return {}
+    query = """
+    query targetInfo($id: String!) {
+      target(ensemblId: $id) {
+        id
+        approvedName
+        approvedSymbol
+        functionDescriptions
+        associatedDiseases(page: {index: 0, size: 5}) {
+          rows {
+            disease { id name }
+            score
+          }
+        }
+        tractability {
+          value
+          modality
+          label
+        }
+      }
+    }
+    """
+    try:
+        r = http_requests.post(
+            'https://api.platform.opentargets.org/api/v4/graphql',
+            json={'query': query, 'variables': {'id': ensembl_gene_id}},
+            timeout=8,
+        )
+        if r.status_code != 200:
+            return {}
+        t = r.json().get('data', {}).get('target') or {}
+        if not t:
+            return {}
+        diseases = [
+            f"{row['disease']['name']} (score: {round(row['score'], 2)})"
+            for row in t.get('associatedDiseases', {}).get('rows', [])
+        ]
+        tractability = [
+            f"{tr['modality']}: {tr['label']}"
+            for tr in (t.get('tractability') or [])
+            if tr.get('value')
+        ]
+        return {
+            'ot_name': t.get('approvedName', ''),
+            'functions': (t.get('functionDescriptions') or [])[:2],
+            'diseases': diseases[:5],
+            'tractability': tractability[:5],
+        }
+    except Exception:
+        return {}
+
+
+@app.route('/api/chat', methods=['POST'])
+def api_chat():
+    data = request.get_json(silent=True) or {}
+    user_msg = (data.get('message') or '').strip()
+    if not user_msg:
+        return jsonify({'error': 'empty message'}), 400
+
+    history = session.get('chat_history', [])
+
+    proteins = _find_proteins_in_message(user_msg)
+
+    context_parts = []
+    sql_shown = None
+
+    for protein in proteins[:3]:
+        hits = _get_compound_hits(protein.uniprot)
+        uniprot_data = _fetch_uniprot(protein.uniprot)
+        ot_data = _fetch_opentargets(uniprot_data.get('ensembl_gene'))
+
+        block = [f"### Protein: {protein.symbol} ({protein.uniprot})"]
+        if protein.description:
+            block.append(f"Description: {protein.description}")
+        if uniprot_data.get('name'):
+            block.append(f"Full name: {uniprot_data['name']}")
+        if uniprot_data.get('function'):
+            block.append(f"Function (UniProt): {uniprot_data['function']}")
+        if uniprot_data.get('subcellular_location'):
+            block.append(f"Subcellular location: {', '.join(uniprot_data['subcellular_location'])}")
+        if uniprot_data.get('diseases'):
+            block.append(f"UniProt disease links: {', '.join(uniprot_data['diseases'])}")
+        if ot_data.get('diseases'):
+            block.append(f"Open Targets disease associations: {'; '.join(ot_data['diseases'])}")
+        if ot_data.get('tractability'):
+            block.append(f"Open Targets tractability: {'; '.join(ot_data['tractability'])}")
+
+        if hits:
+            if sql_shown is None:
+                sql_shown = (
+                    f"SELECT ct.compound_id, r.position, r.type, c.name AS celltype,\n"
+                    f"       MAX(cr.group_cr) AS max_cr\n"
+                    f"FROM chemoproteomics.competitionratios cr\n"
+                    f"JOIN chemoproteomics.residues r ON cr.residue_id = r.id\n"
+                    f"JOIN core.proteins p ON r.uniprot = p.uniprot\n"
+                    f"JOIN core.compoundtreatments ct ON cr.compoundtreatment_id = ct.id\n"
+                    f"JOIN core.celltypes c ON ct.celltype_id = c.id\n"
+                    f"WHERE p.uniprot = '{protein.uniprot}'\n"
+                    f"  AND cr.group_cr >= 4\n"
+                    f"  AND cr.display_flag = TRUE\n"
+                    f"  AND cr.multimapper = FALSE\n"
+                    f"  AND cr.control_rsd <= 30\n"
+                    f"  AND ct.compound_id != 'DMSO'\n"
+                    f"GROUP BY ct.compound_id, r.position, r.type, c.name\n"
+                    f"ORDER BY max_cr DESC\n"
+                    f"LIMIT 15;"
+                )
+            block.append(f"\nTop compound hits from Discoverome (group_cr >= 4, {len(hits)} results):")
+            for h in hits[:12]:
+                block.append(
+                    f"  • {h['compound']}  CR={h['max_cr']}  "
+                    f"residue={h['residue_type']}{h['position']}  cell={h['celltype']}"
+                )
+        else:
+            block.append("No compound hits with group_cr >= 4 found in Discoverome database.")
+
+        context_parts.append('\n'.join(block))
+
+    system_prompt = (
+        "You are DiscoveromeGPT, an expert AI assistant embedded in Discoverome — a chemoproteomics and "
+        "global proteomics platform for drug discovery. "
+        "Answer questions about proteins, compounds, binding data, disease associations, and druggability. "
+        "When database context is provided, summarise the key findings clearly: highlight the most potent "
+        "compounds (highest CR), relevant disease context, and Open Targets tractability insights. "
+        "CR (Competition Ratio) >= 4 means significant covalent compound binding at a residue. "
+        "Use concise markdown. If no database context is present, answer from general biochemistry knowledge."
+    )
+
+    llm_messages = [{'role': 'system', 'content': system_prompt}]
+    llm_messages += history[-10:]
+
+    user_content = user_msg
+    if context_parts:
+        user_content = f"{user_msg}\n\n---\n**Database & API context:**\n\n{''.join(context_parts)}"
+
+    llm_messages.append({'role': 'user', 'content': user_content})
+
+    ollama_host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+    try:
+        response = ollama.Client(host=ollama_host).chat(
+            model='llama3',
+            messages=llm_messages,
+            options={'temperature': 0.3},
+        )
+        if hasattr(response, 'message'):
+            answer = response.message.content
+        else:
+            answer = response['message']['content']
+    except Exception as exc:
+        answer = f"LLM unavailable: {exc}. Check that Ollama is running with `ollama serve`."
+
+    history.append({'role': 'user', 'content': user_msg})
+    history.append({'role': 'assistant', 'content': answer})
+    session['chat_history'] = history[-30:]
+
+    return jsonify({'response': answer, 'sql': sql_shown})
+
+
+@app.route('/api/chat/reset', methods=['POST'])
+def api_chat_reset():
+    session['chat_history'] = []
+    return jsonify({'ok': True})
 
 
 
