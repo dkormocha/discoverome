@@ -1,0 +1,874 @@
+
+{% extends 'base.html' %}
+
+  {% block page_title %}
+    {{ protein.symbol }}
+  {% endblock %}
+
+{% block content %}
+<link rel="stylesheet" type="text/css" href="https://www.ebi.ac.uk/pdbe/pdb-component-library/css/pdbe-molstar-light-3.1.0.css">
+<script type="text/javascript" src="https://www.ebi.ac.uk/pdbe/pdb-component-library/js/pdbe-molstar-plugin-3.1.0.js"></script>
+<!-- 
+<script src="https://cdn.plot.ly/plotly-2.18.2.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script> -->
+
+<script src="https://cdn.plot.ly/plotly-3.0.1.min.js" charset="utf-8"></script>
+
+
+
+
+{% if protein is not none %}
+<h2>Protein Target: {{ protein.symbol }}</h2>
+<a href="https://www.uniprot.org/uniprotkb/{{ protein.uniprot }}/entry">
+    <span class="badge badge-danger">{{ protein.uniprot }}</span>
+</a>
+  {% for p in ps %}
+    {% if p.startswith('ENSG') %}
+      <a href="https://platform.opentargets.org/target/{{p}}">
+        <span class="badge badge-success">{{p}}</span></a>
+    {% else %}
+      <span class="badge badge-primary">{{p}}</span>
+    {% endif %}
+  {% endfor %}
+
+<p id="text" class = "less">
+    {{protein.description}} 
+</p>    
+
+{% endif %}
+
+<button class="btn btn-secondary btn-sm" id="more">Show more</button>
+<button class="btn btn-secondary btn-sm" id="less" style="display:none">Show less</button>
+<hr>
+
+
+
+
+
+
+
+<form class="my-2 my-lg-0 ml-auto form-inline" action="{{ url_for('protein_search', symbol=protein.symbol) }}" method="GET">
+
+  <div class="form-group" style="padding-bottom: 50px;">
+      <label for="residue_type" style="padding-right: 10px;"> Residue Type:</label>
+      <select name="residue_type" id="residue_type" class="form-control">
+          <option value="CYS" {% if selected_residue_type == 'CYS' %}selected{% endif %}>CYS</option>
+          <option value="LYS" {% if selected_residue_type == 'LYS' %}selected{% endif %}>LYS</option>
+      </select>
+      <div class="col text-center">
+          <input class="btn btn-info my-2 my-sm-0" type="submit" value="Select">
+      </div>  
+  </div>  
+</form>
+
+
+
+
+<ul class="nav nav-tabs">
+  <li class="nav-item">
+    <a class="nav-link active" href="{{ url_for('protein_search', symbol=protein.symbol) }}" style="color: black;">Kuljanin Dataset</a>
+  </li>
+</ul>
+
+
+
+
+
+<br>
+
+
+
+
+<form class="my-2 my-lg-0 ml-auto form-inline" action="{{ url_for('protein_search', symbol=protein.symbol) }}">
+  <div class="form-group">
+      <select class="form-control" name="celltype" onchange="redirectIfAllCellTypesSelected()">
+          <option value="" {% if not selected_celltype %}selected{% endif %}>All cell types</option>
+          {% for celltype in celltypes %}
+              <option value="{{ celltype.name }}" {% if selected_celltype == celltype.name %}selected{% endif %}>{{ celltype.name }}</option>
+          {% endfor %}
+      </select>    
+      <div class="col text-center">
+          <button class="btn btn-info my-2 my-sm-0" type="submit">Select</button>
+      </div>
+  </div>
+  <input type="hidden" name="residue_type" value="{% if not request.args.get('residue_type') %}CYS{% else %}{{ request.args.get('residue_type') }}{% endif %}">
+</form>
+
+
+
+
+<br>
+
+{% if not selected_celltype %}
+  <div class="custom-control custom-switch" id="slider-container">
+    <input type="checkbox" class="custom-control-input" id="customSwitch1" name="all_res" {% if request.args.get('all_res') %}checked{% endif %}>
+    <label class="custom-control-label" for="customSwitch1">Show all Sites</label>
+  </div>
+{% else %}
+  <div class="custom-control custom-switch" id="slider-container">
+    <input type="checkbox" class="custom-control-input" id="customSwitch1" name="all_res">
+    <label class="custom-control-label" for="customSwitch1">Show all Sites</label>
+  </div>
+{% endif %}
+
+ 
+
+<br>
+
+<div class="container">
+  {% for position, ligand in position_data.items() %}
+    {% if ligand == 'Pocket Ligand and Residue Features' %}
+      <span class="badge badge-secondary">{{ position }}</span> <span class="badge badge-primary">Pocket</span> <span class="badge badge-warning">Ligand</span> <span class="badge badge-info">Residue Features</span> |
+
+    {% elif ligand == 'Pocket and Residue Features' %}
+      <span class="badge badge-secondary">{{ position }}</span> <span class="badge badge-primary">Pocket</span> <span class="badge badge-info">Residue Features</span> |
+
+    {% elif ligand == 'Pocket Ligand' %}
+      <span class="badge badge-secondary">{{ position }}</span> <span class="badge badge-primary">Pocket</span> <span class="badge badge-warning">Ligand</span> |
+   
+    {% elif ligand == 'Pocket' %}
+      <span class="badge badge-secondary">{{ position }}</span> <span class="badge badge-primary">Pocket</span> |
+    {% elif ligand == 'Ligand and Residue Features' %}
+      <span class="badge badge-secondary">{{ position }}</span> <span class="badge badge-warning">Ligand</span> <span class="badge badge-info">Residue Features</span> |
+    {% elif ligand == 'Ligand' %}
+      <span class="badge badge-secondary">{{ position }}</span> <span class="badge badge-warning">Ligand</span> |
+    {% elif ligand == 'Residue Features' %}
+      <span class="badge badge-secondary">{{ position }}</span> <span class="badge badge-info">Residue Features</span> |
+
+    {% endif %}
+  {% endfor %}
+</div>
+ 
+<div style="max-width:1300px; margin: 0 auto;">
+  {% if data %}
+
+    <div class="row g-3 align-items-start">
+
+      <!-- Heatmap card -->
+      <div class="col-lg-8">
+        <div id="heatmap-wrap">
+          <div id="plot" style="width:100%;"></div>
+        </div>
+
+        <!-- Filters -->
+        <div style="padding: 4px 4px 0;">
+          <p class="filter-label">CR Filter</p>
+          <div class="slider-wrap"><div id="cr_slider" class="slider-styled"></div></div>
+
+          <p class="filter-label">Compound Promiscuity</p>
+          <div class="slider-wrap"><div id="promiscuity_slider" class="slider-styled"></div></div>
+        </div>
+      </div>
+
+      <!-- Side panel -->
+      <div class="col-lg-4">
+        <div id="display-data" style="display:none;"></div>
+      </div>
+
+    </div>
+
+    <div style="text-align:right; margin-top:12px;">
+      <button id="downloadCsv"
+        style="background:linear-gradient(135deg,var(--purple-lo),var(--purple-hi));
+               border:none; border-radius:999px; color:#fff;
+               font-family:'Manrope',sans-serif; font-weight:600; font-size:13px;
+               padding:9px 24px; cursor:pointer;
+               box-shadow:0 4px 14px rgba(124,58,237,0.28);
+               transition:opacity 0.2s;">
+        Download CSV
+      </button>
+    </div>
+
+  {% else %}
+    <p style="color:var(--text-mid); font-family:'Manrope',sans-serif; padding: 40px 0;">No data available for this protein.</p>
+  {% endif %}
+</div>
+
+
+<div style="height:1.5px; background:linear-gradient(90deg,rgba(168,85,247,0.25),transparent); border-radius:2px; margin: 56px 0 32px;"></div>
+
+<h2 style="font-family:'Manrope',sans-serif; font-weight:800; font-size:20px; color:var(--navy); margin-bottom:20px;">Protein Viewer</h2>
+
+<div id="button-container" style="margin-bottom: 100px;"></div>
+
+
+
+<!-- Pdb viewer and table with protein structures  -->
+<div class="row">
+  <div class="col-4">
+    <div class="table-responsive" id="tableContainer" style="max-height: 500px; overflow-y: auto;">
+      <!-- style="display: none;" -->
+      <table class="table table-striped">
+        <thead>
+          <tr>
+            <th>Source</th>
+            <th>ID</th>
+            <th>All Pockets</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(alphafold_found=false) %}
+          <!-- First loop for Alphafold items -->
+          {% for id, (pocket_structure, pqr_all) in protein_structure.items() if id|length != 4 %}
+          <tr>
+            <td>Alphafold</td>
+            <td class="clickable-cell" onclick="updateViewerWithAlphafoldLink('{{id}}'); updateButtons('{{id}}');">{{ id }}</td>
+            <td class="clickable-cell" onclick="AddAllPockets('{{url_for('serve_pqr_file', subpath=pqr_all, pocket_structure=pocket_structure)}}')">Pockets</td>
+          </tr>
+        {% set ns.alphafold_found = true %}
+        {% endfor %}
+        {% for id, (pocket_structure, pqr_all) in protein_structure.items() if id|length == 4 %}
+          <tr>
+            <td>PDB</td>
+            <td class="clickable-cell" onclick="updateViewerAndBgColor('{{id}}'); updateButtons('{{id}}');">{{ id }}</td>
+            <td class="clickable-cell" onclick="AddAllPockets('{{url_for('serve_pqr_file', subpath=pqr_all, pocket_structure=pocket_structure)}}')">Pockets</td>
+          </tr>
+        {% endfor %}
+        {% if not ns.alphafold_found %}
+          <tr>
+            <td>Alphafold</td>
+            <td class="clickable-cell" onclick="updateViewerWithAlphafoldLink('{{protein.uniprot}}'); updateButtons('{{protein.uniprot}}');">{{ protein.uniprot }}</td>
+            <td class="clickable-cell" onclick="AddAllPockets('{{url_for('serve_pqr_file', subpath=pqr_all, pocket_structure=protein_name )}}')">Pockets</td>
+          </tr>
+        {% endif %}
+        </tbody>
+        
+      </table>
+    </div>
+  </div>
+  <div class="col-8">
+    <!-- Molstar 3d viewer  -->
+    <div class="container" id="myViewer"> <pdbe-molstar id="pdbeMolstarComponent"> </pdbe-molstar> </div>
+  </div>
+</div>
+
+
+
+
+<!-- JS script to show all residues -->
+<script>
+  var switchElem = document.getElementById("customSwitch1");
+
+  // Set customSwitch1 to false by default when selected_celltype is true
+  {% if selected_celltype %}
+    switchElem.checked = false;
+  {% endif %}
+
+  switchElem.addEventListener("click", function() {
+    var url = window.location.href;
+    if (switchElem.checked) {
+      url += url.includes("?") ? "&all_res=true" : "?all_res=true";
+      localStorage.setItem("switchState", "on");
+    } else {
+      url = url.replace(/[?&]all_res=true/g, '');
+      localStorage.setItem("switchState", "off");
+    }
+    window.location.href = url;
+  });
+
+  var switchState = localStorage.getItem("switchState");
+  if (switchState === "on") {
+    switchElem.checked = true;
+  } else {
+    switchElem.checked = false;
+  }
+
+  window.addEventListener("load", function() {
+    localStorage.clear();
+  });
+
+</script>
+
+
+
+
+<!-- JS script to redirect page to initial protein page when "All cell types" selected -->
+<script>
+  function redirectIfAllCellTypesSelected() {
+    var selectElem = document.querySelector('select[name="celltype"]');
+    if (selectElem.value === "") {
+      window.location.href = "{{ url_for('protein_search', symbol=protein.symbol) }}";
+    }
+  }
+</script>
+
+
+
+
+<!-- Gives structure/ pocket table values clickable properties  -->
+  <style>
+    .clickable-cell {
+      cursor: pointer;
+      color: rgb(48, 152, 187);
+      transition: background-color 0.1s;
+    }
+    .clickable-cell:hover {
+      text-decoration: underline;
+      background-color: rgba(255, 255, 255, 0.3);
+      
+    }
+  </style>
+  
+
+
+<!-- Heatmap styles -->
+<style>
+  /* ── heatmap card wrapper ── */
+  #heatmap-wrap {
+    background: var(--surface);
+    border: 1.5px solid var(--edge);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 4px 32px rgba(124,58,237,0.07), 0 1px 4px rgba(124,58,237,0.04);
+    padding: 20px 16px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  #heatmap-wrap::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 12%; right: 12%; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--purple-hi), transparent);
+    opacity: 0.5;
+  }
+
+  /* ── side info panel ── */
+  #display-data {
+    background: var(--cream);
+    border: 1.5px solid var(--edge);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    max-height: 860px;
+    overflow-y: auto;
+    font-size: 0.86rem;
+    font-family: 'Manrope', sans-serif;
+  }
+  #display-data::-webkit-scrollbar { width: 5px; }
+  #display-data::-webkit-scrollbar-track { background: transparent; }
+  #display-data::-webkit-scrollbar-thumb { background: rgba(168,85,247,0.25); border-radius: 3px; }
+
+  /* ── info cards ── */
+  .info-card {
+    background: var(--surface);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(168,85,247,0.14);
+    margin-bottom: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 6px rgba(124,58,237,0.05);
+  }
+  .info-card-header {
+    background: var(--navy);
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+  }
+  .info-card table { margin: 0; width: 100%; }
+  .info-card td { padding: 5px 12px; vertical-align: top; }
+  .info-card td:first-child {
+    color: var(--text-lo);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    width: 44%;
+    letter-spacing: 0.04em;
+  }
+  .info-card td:last-child { color: var(--text-hi); font-weight: 500; font-size: 0.83rem; }
+  .info-card tr:not(:last-child) td { border-bottom: 1px solid rgba(168,85,247,0.07); }
+
+  .pval-pass { color: #059669; font-weight: 600; }
+  .pval-fail { color: #dc2626; font-weight: 600; }
+
+  .cpd-header {
+    font-family: 'Manrope', sans-serif;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: var(--text-hi);
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(168,85,247,0.14);
+  }
+  .cpd-header a { color: var(--purple-mid); text-decoration: none; }
+  .cpd-header a:hover { text-decoration: underline; }
+
+  /* ── slider labels ── */
+  .filter-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.70rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-mid);
+    margin-bottom: 10px;
+    margin-top: 28px;
+    display: {% if request.args.get('all_res') %}none{% else %}block{% endif %};
+  }
+  .slider-wrap {
+    display: {% if request.args.get('all_res') %}none{% else %}block{% endif %};
+    margin-bottom: 8px;
+  }
+</style>
+
+<!-- Data injection only — must stay in content block so Jinja2 renders it -->
+<script>
+  window.__HEATMAP_DATA__   = {{ data        | tojson | safe }};
+  window.__HEATMAP_LABELS__ = {{ data_labels | tojson | safe }};
+</script>
+
+<!-- Heatmap logic deferred to extra_js block so noUiSlider is already loaded -->
+{% block extra_js %}
+{{ super() }}
+<script>
+(function () {
+  const RAW_DATA    = window.__HEATMAP_DATA__;
+  const DATA_LABELS = window.__HEATMAP_LABELS__;
+
+  /* ── brand tokens (mirrors CSS :root) ────────────────────────── */
+  const B = {
+    cream:   '#f7f4ee',
+    navy:    '#1a1433',
+    purpleHi:'#a855f7',
+    purpleLo:'#7c3aed',
+    purpleMid:'#9333ea',
+    textMid: '#5b4f7a',
+    textLo:  '#9d90bb',
+    edge:    'rgba(168,85,247,0.20)',
+  };
+
+  /* ── brand-aligned colorscale ─────────────────────────────────
+     CR 0-1  → cream/inactive
+     CR 1-4  → soft lavender ramp
+     CR 4-12 → purple-mid
+     CR 12+  → deep navy-purple                                   */
+  const COLORSCALE = [
+    [0,    '#f0ebff'],   // pale lavender  – null / near-zero
+    [0.05, B.cream],     // cream          – reference level (CR ≈ 1)
+    [0.22, '#c084fc'],   // light purple   – weak hit (CR ≈ 4)
+    [0.50, B.purpleMid], // brand purple   – moderate (CR ≈ 10)
+    [0.75, B.purpleLo],  // deep purple    – strong (CR ≈ 15)
+    [1.0,  '#3b0764'],   // near-black indigo – max
+  ];
+
+  function buildTrace(src, positions, compounds) {
+    const fmt = compounds.map(c => c.split('-')[0]);
+    const z   = positions.map(pos => compounds.map(c => src[pos]?.[c] ?? null));
+    return {
+      x: fmt, y: positions, z,
+      type: 'heatmap',
+      xgap: 2, ygap: 2,
+      colorscale: COLORSCALE,
+      zmin: 0.05, zmax: 20,
+      colorbar: {
+        title: {
+          text: 'CR',
+          side: 'right',
+          font: { size: 11, family: 'JetBrains Mono, monospace', color: B.textMid }
+        },
+        thickness: 12, len: 0.55,
+        tickfont: { size: 10, family: 'JetBrains Mono, monospace', color: B.textLo },
+        tickcolor: B.edge,
+        bgcolor: 'rgba(0,0,0,0)',
+        borderwidth: 0,
+        outlinewidth: 0,
+      },
+      hovertemplate: '<b>%{x}</b><br>Position %{y}<br>CR: <b>%{z:.2f}</b><extra></extra>',
+      hoverlabel: {
+        bgcolor: B.navy,
+        font: { color: '#fff', size: 12, family: 'JetBrains Mono, monospace' },
+        bordercolor: B.purpleHi,
+      }
+    };
+  }
+
+  /* ── dynamic height: 28px per row, capped 380–900px ─────────── */
+  function calcHeight(nPos) { return Math.min(900, Math.max(380, nPos * 28 + 110)); }
+
+  const LAYOUT = {
+    margin: { t: 46, r: 16, b: 80, l: 56 },
+    autosize: true,
+    paper_bgcolor: 'rgba(0,0,0,0)',  // transparent → shows card/cream bg
+    plot_bgcolor:  '#ffffff',
+    font: {
+      family: 'Manrope, -apple-system, sans-serif',
+      size: 12,
+      color: B.navy,
+    },
+    title: {
+      text: 'Competition Ratio',
+      font: { size: 15, color: B.navy, family: 'Manrope, sans-serif' },
+      x: 0.02, xanchor: 'left',
+    },
+    xaxis: {
+      title: { text: 'Compound', font: { size: 11, color: B.textMid }, standoff: 10 },
+      tickangle: -50, type: 'category', automargin: true,
+      tickfont: { size: 9, family: 'JetBrains Mono, monospace', color: B.textLo },
+      showgrid: false, zeroline: false,
+      linecolor: B.edge, linewidth: 1,
+    },
+    yaxis: {
+      title: { text: 'Position', font: { size: 11, color: B.textMid } },
+      type: 'category', tickmode: 'linear',
+      tickfont: { size: 9, family: 'JetBrains Mono, monospace', color: B.textLo },
+      showgrid: false, zeroline: false,
+      linecolor: B.edge, linewidth: 1,
+    },
+  };
+
+  const CONFIG = {
+    responsive: true,
+    displayModeBar: true,
+    displaylogo: false,
+    modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d'],
+    toImageButtonOptions: { format: 'svg', filename: 'heatmap' },
+  };
+
+  /* ── initial render ──────────────────────────────────────────── */
+  let fdata = RAW_DATA;
+  let allPositions = Object.keys(RAW_DATA);
+  let allCompounds = [...new Set(allPositions.flatMap(p => Object.keys(RAW_DATA[p])))];
+
+  // Render an empty placeholder; the slider .set() below will fire the real filtered render
+  Plotly.newPlot('plot', [], { ...LAYOUT, height: calcHeight(allPositions.length) }, CONFIG);
+
+  /* ── click handler ───────────────────────────────────────────── */
+  const panel = document.getElementById('display-data');
+
+  document.getElementById('plot').on('plotly_click', function (evtData) {
+    const pt  = evtData.points[0];
+    const fmt = pt.x;
+    const fmtIndex = allCompounds.findIndex(c => c.split('-')[0] === fmt);
+    const compound = fmtIndex >= 0 ? allCompounds[fmtIndex] : fmt;
+    const position = pt.y;
+    const cr       = pt.z;
+
+    const L = DATA_LABELS?.[position]?.[compound] ?? [];
+    const [afold, cell_line, smiles, image,
+           pdb_structure, p_score, d_score, pvol,
+           mean_c, mid_c, min_c, disulfide, accessibility,
+           lig_struId, ligand_dist, lig_name, lig_mw, artefact,
+           res_sources, res_des, cr4_hits, cr15_hits,
+           p_value, replicate_no] = L;
+
+    const fmt_cpd = compound.replace('-001', '');
+
+    function row(label, val) {
+      if (val == null || val === '' || val === 'N/A') return '';
+      return `<tr><td>${label}</td><td>${val}</td></tr>`;
+    }
+
+    /* CR card */
+    let pvalHtml = '';
+    if (p_value != null && p_value !== '') {
+      const pv = parseFloat(p_value);
+      const cls = pv > 0.05 ? 'pval-fail' : 'pval-pass';
+      const label = pv < 0.001 ? '< 0.001' : pv.toFixed(3);
+      pvalHtml = `<tr><td>P-value</td><td class="${cls}">${label} (${replicate_no} replicates)</td></tr>`;
+    }
+    const crRows = [
+      row('Position', position),
+      row('Cell line', cell_line),
+      row('CR', cr != null ? cr.toFixed(2) : null),
+      pvalHtml,
+      row('Hits ≥ 4',  cr4_hits),
+      row('Hits ≥ 15', cr15_hits),
+      row('Accessibility', accessibility),
+      row('Disulfide', disulfide != null ? (disulfide ? 'Yes' : 'No') : null),
+    ].filter(Boolean).join('');
+
+    const imgHtml = image ? `<tr><td>Structure</td><td><img src="/images${image}" style="width:160px;border-radius:6px;"></td></tr>` : '';
+    const smilesHtml = smiles ? `<tr><td>SMILES</td><td style="word-break:break-all;font-size:0.78rem;">${smiles}</td></tr>` : '';
+
+    /* Pocket card */
+    let structLink = '';
+    if (pdb_structure) {
+      const isAF = pdb_structure.length > 4;
+      structLink = isAF
+        ? row('AlphaFold', `<a href="https://alphafold.ebi.ac.uk/entry/${pdb_structure}" target="_blank">${pdb_structure}</a>`)
+        : row('PDB', `<a href="https://www.rcsb.org/structure/${pdb_structure}" target="_blank">${pdb_structure}</a>`);
+    }
+    const pocketRows = [
+      structLink,
+      row('Pocket score', p_score),
+      row('Drug score',   d_score),
+      row('Volume (MC)',  pvol),
+      row('Mean confidence',   mean_c),
+      row('Median confidence', mid_c),
+      row('Min confidence',    min_c),
+    ].filter(Boolean).join('');
+
+    /* Ligand card */
+    const ligRows = [
+      lig_struId ? row('PDB', `<a href="https://www.rcsb.org/structure/${lig_struId}" target="_blank">${lig_struId}</a>`) : '',
+      row('Name',     lig_name),
+      row('Distance', ligand_dist ? `${ligand_dist} Å` : null),
+      row('MW',       lig_mw ? `${lig_mw} Da` : null),
+      row('Artefact', artefact),
+    ].filter(Boolean).join('');
+
+    /* Residue features card */
+    let resRows = '';
+    if (res_sources && res_sources !== 'N/A') {
+      const srcs = res_sources.split('~');
+      const desc = (res_des || '').split('~');
+      resRows = srcs.map((s, i) =>
+        `<tr><td>${s.trim()}</td><td style="font-size:0.78rem;">${(desc[i] || '').trim()}</td></tr>`
+      ).join('');
+    }
+
+    function card(header, rows) {
+      if (!rows) return '';
+      return `<div class="info-card">
+        <div class="info-card-header">${header}</div>
+        <table class="table table-sm mb-0"><tbody>${rows}</tbody></table>
+      </div>`;
+    }
+
+    panel.innerHTML = `
+      <div class="cpd-header">
+        <a href="/compound/${compound}">${fmt_cpd}</a>
+      </div>
+      ${card('Competition Ratio', crRows + imgHtml + smilesHtml)}
+      ${card('Pocket', pocketRows)}
+      ${card('Ligand', ligRows)}
+      ${card('Residue Features', resRows)}
+    `;
+    panel.style.display = 'block';
+  });
+
+  /* ── CR slider ───────────────────────────────────────────────── */
+  const cr_slider = document.getElementById('cr_slider');
+  noUiSlider.create(cr_slider, {
+    start: [4, 20], connect: true, step: 0.5,
+    tooltips: true,
+    pips: { mode: 'count', values: 3, density: 5 },
+    range: { min: 0, max: 20 }
+  });
+
+  cr_slider.noUiSlider.on('update', function (vals) {
+    const minCR = parseFloat(vals[0]);
+    const maxCR = parseFloat(vals[1]) === 20 ? Infinity : parseFloat(vals[1]);
+    const showAll = document.getElementById('customSwitch1').checked;
+
+    if (showAll) { fdata = RAW_DATA; }
+    else {
+      fdata = {};
+      Object.keys(RAW_DATA).forEach(pos => {
+        const fc = {};
+        Object.keys(RAW_DATA[pos]).forEach(cpd => {
+          const v = RAW_DATA[pos][cpd];
+          if (v !== null && v >= minCR && v <= maxCR) fc[cpd] = v;
+        });
+        if (Object.keys(fc).length) fdata[pos] = fc;
+      });
+    }
+    redraw(fdata);
+  });
+
+  /* ── Promiscuity slider ──────────────────────────────────────── */
+  const pro_slider = document.getElementById('promiscuity_slider');
+  noUiSlider.create(pro_slider, {
+    start: [0, 6000], connect: true, tooltips: true,
+    pips: { mode: 'count', values: 3, density: 5 },
+    range: { min: 0, '50%': 100, '60%': 250, max: 6000 }
+  });
+
+  pro_slider.noUiSlider.on('update', function (vals) {
+    const minP = parseFloat(vals[0]);
+    const maxP = parseFloat(vals[1]);
+    const showAll = document.getElementById('customSwitch1').checked;
+
+    if (showAll) { fdata = RAW_DATA; redraw(fdata); return; }
+
+    const filtered = {};
+    Object.keys(fdata).forEach(pos => {
+      const fc = {};
+      Object.keys(fdata[pos]).forEach(cpd => {
+        const pro = DATA_LABELS?.[pos]?.[cpd]?.[20];
+        if (pro !== null && pro >= minP && pro <= maxP) fc[cpd] = fdata[pos][cpd];
+      });
+      if (Object.keys(fc).length) filtered[pos] = fc;
+    });
+    fdata = filtered;
+    redraw(fdata);
+  });
+
+  // Apply initial filter to match slider starting positions
+  cr_slider.noUiSlider.set(cr_slider.noUiSlider.get());
+
+  function redraw(src) {
+    const pos  = Object.keys(src);
+    const cpds = [...new Set(pos.flatMap(p => Object.keys(src[p])))];
+    allPositions = pos;
+    allCompounds = cpds;
+    Plotly.react('plot', [buildTrace(src, pos, cpds)], { ...LAYOUT, height: calcHeight(pos.length) }, CONFIG);
+  }
+
+  /* expose fdata for CSV download */
+  window._fdata       = () => fdata;
+  window._dataLabels  = DATA_LABELS;
+})();
+</script>
+
+
+
+
+<!-- JS for Molstar 3d viewer  -->
+  <script>
+      var viewerInstance = new PDBeMolstarPlugin();
+        var options = {
+          customData: {
+            {% if protein is not none %}
+          url: 'https://alphafold.ebi.ac.uk/files/AF-{{protein.uniprot}}-F1-model_v6.cif'
+          {% endif %}
+          ,
+          format: 'cif'
+          },
+          alphafoldView: true,
+          // hideCanvasControls: ['expand', 'selection', 'animation', 'controlToggle', 'controlInfo'],
+          // moleculeId: structure,
+          // landscape: true,
+          alphafoldView: true,
+          domainAnnotation : true,
+          bgColor	: {r:255, g:255, b:255},
+          // ligandView:'REA' , 
+          // hideControls: true,
+          // sequencePanel: true,
+          pdbeLink: false,
+        }
+        var viewerContainer = document.getElementById('myViewer');
+        
+        viewerInstance.render(viewerContainer, options);
+  </script>
+
+
+  <!-- script to generate cysteine button for a given protein strucutre, then clicking on button will focus and highlight the cysteine residue  -->
+  <script>
+    function generateButtons(positions) {
+      const container = document.getElementById('button-container');
+      container.innerHTML = '';
+
+      positions.forEach((position) => {
+        const residuePosition = position[0];
+        const pdbPosition = position[1];
+        const chain = position[2];
+
+        const button = document.createElement('button');
+        button.classList.add('btn', 'btn-info');
+        button.innerText = `${residuePosition} | ${chain}`;
+        button.dataset.toggle = 'tooltip';
+        button.dataset.placement = 'top';
+        button.dataset.trigger = 'hover';
+        button.dataset.title = `${residuePosition} | chain: ${chain} | PDB Position: ${pdbPosition}`;
+        button.onclick = () => focusAndHighlight(pdbPosition, chain);
+        button.style.margin = '0 10px 10px 0';
+        container.appendChild(button);
+      });
+      $('[data-toggle="tooltip"]').tooltip();
+
+    }
+
+    function updateButtons(id) {
+      const btn_position = {{ btn_position | tojson }};
+      if (btn_position.hasOwnProperty(id)) {
+        generateButtons(btn_position[id]);
+      } else {
+        document.getElementById('button-container').innerHTML = '';
+      }
+    }
+  </script>
+
+<script>
+  // Define the lastUpdatedStructureId as a global variable
+  var lastUpdatedStructureId = "";
+
+  function focusAndHighlight(position, chain) {
+    const highlightColor = { r: 255, g: 0, b: 255 };
+
+    // If a molecule has been updated, then update it again
+    if (lastUpdatedStructureId !== "") {
+      if (lastUpdatedStructureId.length > 4) {
+        viewerInstance.visual.update({
+          customData: { url: `https://alphafold.ebi.ac.uk/files/AF-${lastUpdatedStructureId}-F1-model_v6.cif`, format: 'cif'}
+        }, false);
+      } else {
+        viewerInstance.visual.update({
+          moleculeId: lastUpdatedStructureId,
+        }, false);
+      }
+      viewerInstance.canvas.setBgColor({ r: 255, g: 255, b: 255 });
+    }
+
+    viewerInstance.visual.select({data: [{struct_asym_id:chain, auth_seq_id: position, sideChain: true , color: highlightColor, focus: true }]});   // nonSelectedColor: {r:255,g:255,b:255}
+
+    viewerInstance.visual.highlight({ data: [{ struct_asym_id:chain, auth_seq_id: position, }], color: highlightColor });
+  }
+
+  function updateViewerAndBgColor(moleculeId) {
+    viewerInstance.visual.update({
+      moleculeId: moleculeId,
+      // hideStructure: ['water']
+    });
+    viewerInstance.canvas.setBgColor({ r: 255, g: 255, b: 255 });
+    lastUpdatedStructureId = moleculeId;  // Update the last updated structure id
+  }
+
+  function updateViewerWithAlphafoldLink(moleculeId) {
+    viewerInstance.visual.update({
+      customData: { url: `https://alphafold.ebi.ac.uk/files/AF-${moleculeId}-F1-model_v6.cif`, format: 'cif'}
+    });
+    viewerInstance.canvas.setBgColor({ r: 255, g: 255, b: 255 });
+    lastUpdatedStructureId = moleculeId;  // Update the last updated structure id
+  }
+</script>
+
+
+
+
+<!-- JS to add pockets and all pockets to molstar viewer  -->
+  <script>
+
+    function AddAllPockets(pqrAllUrl) {
+      viewerInstance.visual.update({
+        customData: { url: pqrAllUrl, format: 'pdb' }
+      }, false);
+
+      setTimeout(function(){
+        viewerInstance.visual.select({data:[{representation: 'molecular-surface' }]});
+      }, 500);
+
+      viewerInstance.canvas.setBgColor({ r: 255, g: 255, b: 255 });
+    }
+  </script>
+
+
+
+
+<script>
+  document.getElementById("downloadCsv").addEventListener("click", function () {
+    const fdata      = window._fdata();
+    const dataLabels = window._dataLabels;
+    const res = "{{ 'LYS' if selected_residue_type == 'LYS' else 'CYS' }}";
+    const rows = [["Compound", "Position", "CR", "Uniprot", "SMILES", "Promiscuity>=4"]];
+
+    for (const position in fdata) {
+      for (const compound in fdata[position]) {
+        const CR = fdata[position][compound];
+        const L  = dataLabels?.[position]?.[compound];
+        if (L) rows.push([compound, res + position, CR, L[0] ?? '', L[2] ?? '', L[20] ?? '']);
+      }
+    }
+
+    const blob = new Blob([rows.map(r => r.join(",")).join("\n")], { type: "text/csv;charset=utf-8;" });
+    const link = Object.assign(document.createElement("a"), {
+      href: URL.createObjectURL(blob), download: "heatmap_data.csv", style: "display:none"
+    });
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  });
+</script>
+
+{% endblock %}{# extra_js #}
+
+{% endblock %}{# content #}
+
