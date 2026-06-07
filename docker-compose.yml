@@ -3,24 +3,50 @@ services:
   db:
     image: postgres:13
     restart: always
-    env_file:
-      - .env
+    env_file: .env
     ports:
       - "6544:5432"
     volumes:
       - db:/var/lib/postgresql/data
 
-  # web:
-  #   build: .
-  #   restart: always
-  #   depends_on:
-  #     - db
-  #   env_file:
-  #     - .env
-  #   ports:
-  #     - "6969:6969"
-  #   volumes:
-  #     - .:/app
+  web:
+    build: .
+    restart: always
+    depends_on:
+      - db
+    env_file: .env
+    ports:
+      - "6969:6969"
+    volumes:
+      - .:/app
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    depends_on:
+      - web
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - db
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    volumes:
+      - grafana_data:/var/lib/grafana
 
 volumes:
   db:
+  grafana_data:
