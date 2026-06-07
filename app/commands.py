@@ -1554,6 +1554,10 @@ def external_compound_data(crfile, comfile, logfile):
             compoundt_treatment_id = db.session.query(CompoundTreatment).filter(CompoundTreatment.compound_id == compound_name).first()
             plex = db.session.query(Plex).filter(Plex.id == 'Kuljanin_plex').first()
 
+            if compoundt_treatment_id is None:
+                logging.warning(f"No CompoundTreatment found for compound '{compound_name}', skipping row")
+                continue
+
             kul_cpr = CompetitionRatio(
                 plex=plex,
                 compoundtreatment_id=compoundt_treatment_id.id,
