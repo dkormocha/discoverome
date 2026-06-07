@@ -1,0 +1,290 @@
+{% extends 'base.html' %}
+
+{% block page_title %}
+Protein-Compound GP 
+{% endblock %}
+
+{% block content %}
+
+
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+
+
+
+
+<h2 style="margin-bottom: 2%;"> Protein Search </h2>
+
+
+<div class="row">
+
+    
+    <div class="col-12">
+        <form id="gp_form" class="form-inline my-2 my-lg-0 ml-auto" >
+            <input class="form-control mr-sm-2" type="text" id="gp_auto"  placeholder="Search">
+            <button class="btn btn-danger my-2 my-sm-0" type="submit">Search</button>
+        </form>
+    </div>
+
+    <h3 style="margin: 2%; display: none;">  </h3>
+
+    <div class="col-12">
+        <div id="volcano-plot"></div>
+    </div>
+
+    <div class="col-4" id= 'slider-bar' style="display: none;">
+        <h4>FoldChange Slider</h4>
+            <div style="margin-top: 10%;" id="fc_slider"></div>
+    </div>
+
+
+    <div class="col-12" style="margin-top: 5%;">
+
+        <table id="cpd-hit-data" style="display: none;" class="table table-striped table-bordered">
+            <thead>
+                    <tr>
+                    <th> Uniprot </th>
+                    <th> Symbol </th>
+                    <th> Compound </th>
+                    <th> Smiles </th>
+                    <th> FoldChange </th>
+                    <th> P Value </th>
+                    <th> Concentration</th>
+                    <th> Time </th>
+                    <th> Temperature </th>
+                    <th> Experiment </th>
+                    <th> Cell Type </th>
+                    <th> Project </th>
+                    <th> Organism </th>
+                    </tr>
+                </thead>
+        </table>
+
+    </div>
+
+    
+
+    
+
+
+
+
+
+</div>
+
+
+
+
+
+
+
+
+<!-- JS to create  -->
+
+    <script>
+        $(document).ready(function () {
+            let trace1, trace2, trace3, layout, currentData = [];
+
+            $("#gp_auto").autocomplete({
+                source: function (request, response) {
+                    $.ajax({
+                        url: '/gp_autocomplete',
+                        data: { gp_protein: request.term.toUpperCase() },
+                        success: function (data) {
+                            response(data);
+                        }
+                    });
+                },
+                minLength: 3
+            });
+
+            $('#gp_form').on('submit', function (e) {
+                e.preventDefault();
+                const protein = $('#gp_auto').val();
+                if (!protein) {
+                    alert("Please enter a protein symbol.");
+                    return;
+                }
+
+                $.ajax({
+                    url: '/protein_compound_gp',
+                    method: 'GET',
+                    data: { gp_auto: protein },
+                    success: function (response) {
+                        const res = JSON.parse(response);
+                        const data = res.updated_data;
+
+                        if (!data.length) {
+                            alert("No data found for the selected protein.");
+                            return;
+                        }
+
+                        currentData = data;
+                        renderVolcanoPlot(currentData);
+
+                        $("h3").html(`Protein: <a href="/protein/${data[0].symbol.toUpperCase()}">${data[0].symbol.toUpperCase()}</a>`).show();
+                        $("#slider-bar").show();
+
+                        if ($.fn.DataTable.isDataTable('#cpd-hit-data')) {
+                            $('#cpd-hit-data').DataTable().clear().destroy();
+                        }
+
+                        $('#cpd-hit-data').show().DataTable({
+                            scrollX: true,
+                            order: [[2, 'desc']],
+                            dom: 'lBfrtip',
+                            buttons: [
+                                { extend: 'excelHtml5', title: 'Protein output data' },
+                                { extend: 'csvHtml5', title: 'Protein output data' }
+                            ],
+                            data: data,
+                            columns: [
+                                { data: "uniprot" },
+                                { data: "symbol" },
+                                { 
+                                    data: "compound",
+                                    render: function (data, type, row) {
+                                        return `
+                                            <span class="compound-hover">
+                                                ${data}
+                                                <img class="compound-image" src="${row.cpd_image}" alt="Compound Image" />
+                                            </span>
+                                        `;
+                                    }
+                                },
+                                { data: "smiles" },
+                                { data: "foldchange" },
+                                { data: "p_value"},
+                                { data: 'concentration'},
+                                { data: 'time'},
+                                { data: 'temperature'},
+                                { data: "experiment" },
+                                { data: "celltype" },
+                                { data: "project" },
+                                { data: "organism" }
+                            ]
+                        });
+
+                        const fc_slider = document.getElementById('fc_slider');
+                        if (fc_slider.noUiSlider) {
+                            fc_slider.noUiSlider.destroy();
+                        }
+
+                        noUiSlider.create(fc_slider, {
+                            start: [1.3],
+                            step: 0.05,
+                            tooltips: true,
+                            range: {
+                                'min': 0,
+                                'max': 4
+                            },
+                            pips: {
+                                mode: 'range',
+                                density: 5
+                            }
+                        });
+
+                        fc_slider.noUiSlider.on('update', function (values, handle) {
+                            const threshold = parseFloat(values[handle]);
+                            updatePlot(threshold);
+                        });
+                    },
+                    error: function () {
+                        alert("Error fetching protein data.");
+                    }
+                });
+            });
+
+            function renderVolcanoPlot(data) {
+                const down = data.filter(item => item.foldchange <= -1.3 && item.p_value >= 1.3);
+                const up = data.filter(item => item.foldchange >= 1.3 && item.p_value >= 1.3);
+                const remaining = data.filter(item => !down.includes(item) && !up.includes(item));
+
+                trace1 = {
+                    x: remaining.map(i => i.foldchange),
+                    y: remaining.map(i => i.p_value),
+                    mode: 'markers',
+                    type: 'scatter',
+                    text: remaining.map(i => i.compound),
+                    marker: { size: 8, color: '#FFB000', opacity: 0.5 },
+                    name: 'Insignificant'
+                };
+
+                trace2 = {
+                    x: down.map(i => i.foldchange),
+                    y: down.map(i => i.p_value),
+                    mode: 'markers+text',
+                    type: 'scatter',
+                    text: down.map(i => i.compound),
+                    marker: { size: 12, color: '#648FFF', symbol: 'diamond' },
+                    name: 'Downregulated'
+                };
+
+                trace3 = {
+                    x: up.map(i => i.foldchange),
+                    y: up.map(i => i.p_value),
+                    mode: 'markers+text',
+                    type: 'scatter',
+                    text: up.map(i => i.compound),
+                    marker: { size: 12, color: '#DC267F', symbol: 'diamond' },
+                    name: 'Upregulated'
+                };
+
+                layout = {
+                    title: 'Volcano Plot',
+                    hovermode: 'closest',
+                    xaxis: { title: 'log2 FoldChange' },
+                    yaxis: { title: '-log10 pValue' },
+                    height: 800,
+                    shapes: [
+                        { type: 'line', x0: -5, y0: 1.3, x1: 5, y1: 1.3, line: { dash: 'dash', color: '#004D40' }},
+                        { type: 'line', x0: -1.3, y0: 0, x1: -1.3, y1: 8, line: { dash: 'dash', color: '#004D40' }},
+                        { type: 'line', x0: 1.3, y0: 0, x1: 1.3, y1: 8, line: { dash: 'dash', color: '#004D40' }}
+                    ]
+                };
+
+                Plotly.newPlot('volcano-plot', [trace1, trace2, trace3], layout);
+            }
+
+            function updatePlot(threshold) {
+                const down = currentData.filter(i => i.foldchange <= -threshold && i.p_value >= 1.3);
+                const up = currentData.filter(i => i.foldchange >= threshold && i.p_value >= 1.3);
+                const rest = currentData.filter(i => !down.includes(i) && !up.includes(i));
+
+                trace1.x = rest.map(i => i.foldchange);
+                trace1.y = rest.map(i => i.p_value);
+                trace1.text = rest.map(i => i.compound);
+
+                trace2.x = down.map(i => i.foldchange);
+                trace2.y = down.map(i => i.p_value);
+                trace2.text = down.map(i => i.compound);
+
+                trace3.x = up.map(i => i.foldchange);
+                trace3.y = up.map(i => i.p_value);
+                trace3.text = up.map(i => i.compound);
+
+                layout.shapes[1].x0 = layout.shapes[1].x1 = -threshold;
+                layout.shapes[2].x0 = layout.shapes[2].x1 = threshold;
+
+                Plotly.react('volcano-plot', [trace1, trace2, trace3], layout);
+            }
+        });
+    </script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+{% endblock %}

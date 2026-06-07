@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+
+{% block page_title %}
+All Compounds 
+{% endblock %}
+
+{% block content %}
+
+<script>
+    $(document).ready(function() {
+        $('#compound_list').DataTable({
+            dom: 'lBfrtip',
+            buttons: [{ extend: 'excelHtml5', title: 'ClaymorCompounds'}, { extend: 'csvHtml5', title: 'ClaymorCompounds'}]
+        });
+    });
+</script>
+
+<div class="table-responsive">
+    <table id="compound_list" class="table table-striped table-bordered">
+        <thead>
+            <tr>
+            <th>Compound</th>
+            <th>Image</th>
+            <th> SMILES</th>
+            <th>CYS Hits (>=4)</th>
+            <th>LYS Hits (>=4)</th>
+            </tr>
+            </thead>
+            <tbody>
+                {% for index in range(data['Compound']|length) %}   
+                  <tr>
+                    <td><a href="/compound/{{ data['Compound'][index] }}">{{ data['Compound'][index] }}</a></td>
+                    <td><img src="/images{{ data['Image'][index] }}" width="200px"> </td>
+                    <td>{{data['Smiles'][index]}}</td>
+                    <td>{{ data['CYS hits'][index] }}</td>
+                    <td>{{ data['LYS hits'][index] }}</td>
+                  </tr>
+                {% endfor %}
+            </tbody>
+    </table>
+</div>
+
+{% endblock %}

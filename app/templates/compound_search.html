@@ -1,0 +1,175 @@
+
+{% extends 'base.html' %}
+
+{% block page_title %}
+{{ compound.id}}
+{% endblock %}
+
+{% block content %}
+<!-- 
+<script src="https://cdn.plot.ly/plotly-2.18.2.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+ -->
+
+
+{% if compound is not none %}
+<h4>
+  Compound: {{ compound.id | replace('-001', '') }}
+</h4>
+{% endif %}
+ <img src="/images{{comp_image}}" width="200px" height="200px" style="padding-left: 2%;">
+
+
+<!-- Residue type toggle -->
+ <form class="my-2 my-lg-0 ml-auto form-inline" action="{{ url_for('compound_search', name=compound.id) }}" method="GET">
+
+  <div class="form-group" style="padding-bottom: 50px;">
+      <label for="residue_type" style="padding-right: 10px;"> Residue Type:</label>
+      <select name="residue_type" id="residue_type" class="form-control">
+          <option value="CYS" {% if selected_residue_type == 'CYS' %}selected{% endif %}>CYS</option>
+          <option value="LYS" {% if selected_residue_type == 'LYS' %}selected{% endif %}>LYS</option>
+      </select>
+      <div class="col text-center">
+          <input class="btn btn-info my-2 my-sm-0" type="submit" value="Select">
+      </div>  
+  </div>  
+</form>
+
+<!-- Cell type selection -->
+<form class="my-2 my-lg-0 ml-auto form-inline" action="{{ url_for('compound_search', name=compound.id) }}">
+  <div class="form-group">
+    <select class="form-control" name="celltype">
+      <option value="" {% if not selected_celltype %}selected{% endif %}>All cell types</option>
+      {% for celltype in celltypes %}
+        <option value="{{ celltype.name }}" {% if selected_celltype == celltype.name %}selected{% endif %}>{{ celltype.name }}</option>
+      {% endfor %}
+    </select>
+    <div class="col text-center">
+      <button class="btn btn-info my-2 my-sm-0" type="submit">Select</button>
+    </div>
+  </div>
+</form>
+
+
+<!-- Compound hits plotyl scatter graph -->
+<div id="scatter-graph"></div>
+
+
+<h4> Top Hits</h4>
+
+<!-- Table with top hits for the compound -->
+<div class="table-responsive">
+  <table id="example" class="table table-striped table-bordered">
+    <thead>
+      <tr>
+          <th>Protein</th>
+          <th>Symbol</th>
+          <th>Position</th>
+          <th>Cell Type</th>
+          <th>Concentration</th>
+          <th>Time</th>
+          <th>CR</th>
+      </tr>
+  </thead>
+  <tbody>
+      {% for i in range(protein_tbl['Protein']| length) %}
+          <tr>
+              <td>{{ protein_tbl['Protein'][i] }}</td>
+              <td>{{ protein_tbl['Symbol'][i] }}</td>
+              <td>{{ protein_tbl['Position'][i] }}</td>
+              <td>{{ protein_tbl['Cell Type'][i] }}</td>
+              <td>{{ protein_tbl['Concentration'][i] }}</td>
+              <td>{{ protein_tbl['Time'][i] }}</td>
+              <td>{{ protein_tbl['CR'][i] }}</td>
+          </tr>
+      {% endfor %}
+  </tbody>
+</table>
+
+</div>
+
+
+
+
+<script>
+  const data = {{ data | tojson }};
+  const highCompProteins = [];
+
+  for (let i = 0; i < data.length; i++) {
+    const d = data[i];
+    if (d.y > 4) {
+      highCompProteins.push(d.x);
+    }
+  }
+
+  const traceData = [];
+
+  const color = data.map(d => (d.y > 4 && highCompProteins.includes(d.x)) ? '#0096FF' : '#FFBF00')
+
+  // Create a trace for the scatter plot
+  traceData.push({
+    x: data.map(d => d.x),
+    y: data.map(d => d.y),
+    text: data.map(d => `Position: ${d.position}`),
+    mode: 'markers',
+    marker: {
+      color: color,
+      size: 8,
+    },
+  });
+  const layout = {
+    title: {
+      text: 'Competition Ratio Scatter Plot',
+      font: {
+        size: 20
+      }
+  },
+    xaxis: {
+      showticklabels: false
+    },
+    yaxis: {
+      title: { text: 'Competition Ratio',
+      font:{
+        size:18
+      }
+    },
+      range: [0, 22],
+      tickfont: {
+        size: 16
+      },
+    },
+    hovermode: 'closest',
+    hoverlabel: {
+      font: {
+        size: 18
+      }
+    },
+  };
+
+  Plotly.newPlot('scatter-graph', traceData, layout);
+
+
+  function handleClick(evt) {
+    if (evt.points.length > 0) {
+      const protein = evt.points[0].x;
+      window.location.href = `/protein/${protein}`;
+    }
+  }
+
+  const scatterGraph = document.getElementById('scatter-graph');
+  scatterGraph.on('plotly_click', handleClick);
+</script>
+
+    
+
+
+
+
+
+
+
+
+
+
+
+{% endblock %}
