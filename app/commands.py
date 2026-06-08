@@ -17,7 +17,7 @@ import uuid
 from rdkit import Chem
 from rdkit.Chem import Draw
 import statistics as stat
-from app.models import *
+from app.models.models import *
 
 
 from scipy.stats import ttest_ind
@@ -1051,8 +1051,7 @@ def smiles_import(smilefile, logfile):
 @click.option('-l', '--logfile', default = 'cpd_images.log')
 def smiles_import(logfile):
     "Calculate images from SMILES, save into folder and import path to compound table"
-
-    from app.models import db, Compound
+    from app.extensions import db
 
     logging.basicConfig(
         filename = logfile,
@@ -1068,13 +1067,13 @@ def smiles_import(logfile):
             logging.info(f"For Compound {s.id} creating new SMILES strucutre {s.smiles}")            
             mol = Chem.MolFromSmiles(s.smiles) # create a chemical strucutre from the smiles string
             img = Draw.MolToImage(mol) #draw the strucutre 
-            file = f'/resources/smiles-structure/{s.id}.png'
+            file = f'app/static/resources/smiles-structure/{s.id}.png'
             if os.path.exists(file):
                 logging.info(f"File for {s.id} already exists")
             else:
                 img.save(file)
 
-            s.image = file
+            s.image = f"/{file}"
             logging.info(f"Adding image path of {s.id} to image field")
             db.session.commit()
 
