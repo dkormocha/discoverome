@@ -313,7 +313,8 @@ def advance_search():
 
 @app.route('/images/<path:filename>')
 def get_image(filename):
-    return send_from_directory('/', filename)  # Serve the file from the root directory
+    project_root = os.path.dirname(app.root_path)
+    return send_from_directory(project_root, filename)
 
 
 
