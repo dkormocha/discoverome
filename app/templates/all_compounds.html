@@ -1,19 +1,15 @@
 {% extends 'base.html' %}
 
 {% block page_title %}
-All Compounds 
+All Compounds
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.datatables.net/buttons/3.1.2/css/buttons.dataTables.min.css">
 {% endblock %}
 
 {% block content %}
 
-<script>
-    $(document).ready(function() {
-        $('#compound_list').DataTable({
-            dom: 'lBfrtip',
-            buttons: [{ extend: 'excelHtml5', title: 'ClaymorCompounds'}, { extend: 'csvHtml5', title: 'ClaymorCompounds'}]
-        });
-    });
-</script>
 
 <div class="table-responsive">
     <table id="compound_list" class="table table-striped table-bordered">
@@ -40,4 +36,22 @@ All Compounds
     </table>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/3.1.2/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/3.1.2/js/buttons.html5.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('#compound_list').DataTable({
+            dom: 'lBfrtip',
+            buttons: [
+                { extend: 'excelHtml5', title: 'Discoverome Compounds' },
+                { extend: 'csvHtml5',   title: 'Discoverome Compounds' }
+            ]
+        });
+    });
+</script>
 {% endblock %}
