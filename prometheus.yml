@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'disoverome'
+    static_configs:
+      - targets: ['web:6969']   # Flask container, internal Docker network
+    metrics_path: '/metrics'
