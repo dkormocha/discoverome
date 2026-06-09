@@ -11,6 +11,7 @@ from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from sqlalchemy_utils import UUIDType
 from sqlalchemy.sql import text
+from pgvector.sqlalchemy import Vector
 
 from app.extensions import db
 
@@ -523,3 +524,15 @@ class Pocket(db.Model):
 
     structure = relationship("Structure", back_populates = "pockets")
     residues = relationship("StructureResidue", secondary = 'structure.pocket2residue', back_populates = "pockets",uselist = True, overlaps = "pockets")
+
+
+class ProteinEmbedding(db.Model):
+    __tablename__ = "protein_embeddings"
+    __table_args__ = {"schema": "core"}
+
+    id       = db.Column(UUID(as_uuid=True), default=uuid.uuid4, primary_key=True)
+    uniprot  = db.Column(db.String, ForeignKey("core.proteins.uniprot"), nullable=False, index=True)
+    chunk_text = db.Column(db.Text, nullable=False)
+    embedding  = db.Column(Vector(768), nullable=False)
+
+    protein = relationship("Protein", backref="embeddings")
