@@ -97,7 +97,7 @@ body {
 .page-wrap {
   position: relative;
   z-index: 1;
-  max-width: 960px;
+  max-width: 70%;
   margin: 0 auto;
   padding: 0 28px 120px;
 }
@@ -126,7 +126,7 @@ body {
 
 .logo-wordmark {
   font-family: 'Manrope', sans-serif;
-  font-weight: 800;
+  font-weight: 600;
   font-size: 42px;
   letter-spacing: -1.5px;
   line-height: 1;
@@ -620,7 +620,8 @@ table#list tbody td:last-child { color: var(--text-mid); font-size: 13px; }
 /* Existing utility styles retained */
 .center {
     margin: auto;
-    width: 60%;
+    width: 50%;
+    height: 50%;
     padding: 10px;
   }
 
