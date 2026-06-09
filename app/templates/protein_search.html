@@ -1,9 +1,13 @@
 
 {% extends 'base.html' %}
 
-  {% block page_title %}
-    {{ protein.symbol }}
-  {% endblock %}
+{% block page_title %}
+  {{ protein.symbol }}
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/slider_style.css') }}">
+{% endblock %}
 
 {% block content %}
 <link rel="stylesheet" type="text/css" href="https://www.ebi.ac.uk/pdbe/pdb-component-library/css/pdbe-molstar-light-3.1.0.css">
@@ -47,18 +51,23 @@
 
 
 
-<form class="my-2 my-lg-0 ml-auto form-inline" action="{{ url_for('protein_search', symbol=protein.symbol) }}" method="GET">
+<form class="form-inline my-2 my-lg-0 ml-auto"
+      action="{{ url_for('protein_search', symbol=protein.symbol) }}"
+      method="GET">
 
-  <div class="form-group" style="padding-bottom: 50px;">
-      <label for="residue_type" style="padding-right: 10px;"> Residue Type:</label>
-      <select name="residue_type" id="residue_type" class="form-control">
-          <option value="CYS" {% if selected_residue_type == 'CYS' %}selected{% endif %}>CYS</option>
-          <option value="LYS" {% if selected_residue_type == 'LYS' %}selected{% endif %}>LYS</option>
-      </select>
-      <div class="col text-center">
-          <input class="btn btn-info my-2 my-sm-0" type="submit" value="Select">
-      </div>  
-  </div>  
+    <div class="form-group d-flex align-items-center" style="padding-bottom: 50px;">
+        <label for="residue_type" class="mb-0 mr-2">
+            Residue Type:
+        </label>
+
+        <select name="residue_type" id="residue_type" class="form-control mr-2" style="width: 120px;">
+            <option value="CYS" {% if selected_residue_type == 'CYS' %}selected{% endif %}>CYS</option>
+            <option value="LYS" {% if selected_residue_type == 'LYS' %}selected{% endif %}>LYS</option>
+        </select>
+
+        <input class="btn btn-info" type="submit" value="Select" style=" margin-left: 1%;">
+    </div>
+
 </form>
 
 
@@ -79,19 +88,36 @@
 
 
 
-<form class="my-2 my-lg-0 ml-auto form-inline" action="{{ url_for('protein_search', symbol=protein.symbol) }}">
-  <div class="form-group">
-      <select class="form-control" name="celltype" onchange="redirectIfAllCellTypesSelected()">
-          <option value="" {% if not selected_celltype %}selected{% endif %}>All cell types</option>
-          {% for celltype in celltypes %}
-              <option value="{{ celltype.name }}" {% if selected_celltype == celltype.name %}selected{% endif %}>{{ celltype.name }}</option>
-          {% endfor %}
-      </select>    
-      <div class="col text-center">
-          <button class="btn btn-info my-2 my-sm-0" type="submit">Select</button>
-      </div>
-  </div>
-  <input type="hidden" name="residue_type" value="{% if not request.args.get('residue_type') %}CYS{% else %}{{ request.args.get('residue_type') }}{% endif %}">
+<form class="form-inline my-2 my-lg-0 ml-auto"
+      action="{{ url_for('protein_search', symbol=protein.symbol) }}">
+
+    <div class="form-group d-flex align-items-center">
+
+        <select class="form-control mr-2"
+                name="celltype"
+                onchange="redirectIfAllCellTypesSelected()"
+                style="width: 220px;">
+            <option value="" {% if not selected_celltype %}selected{% endif %}>
+                All cell types
+            </option>
+            {% for celltype in celltypes %}
+                <option value="{{ celltype.name }}"
+                        {% if selected_celltype == celltype.name %}selected{% endif %}>
+                    {{ celltype.name }}
+                </option>
+            {% endfor %}
+        </select>
+
+        <button class="btn btn-info" type="submit" style=" margin-left: 1%;">
+            Select
+        </button>
+
+    </div>
+
+    <input type="hidden"
+           name="residue_type"
+           value="{% if not request.args.get('residue_type') %}CYS{% else %}{{ request.args.get('residue_type') }}{% endif %}">
+
 </form>
 
 
