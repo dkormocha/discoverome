@@ -7,6 +7,7 @@ from flask import Blueprint
 from os.path import exists
 from tqdm import tqdm
 import logging
+import ollama
 
 from sqlalchemy import or_, func
 
@@ -2378,3 +2379,63 @@ def remove_compound_data(compoundid, logfile, dry_run):
         logging.exception("Deletion failed")
 
         print(f"Error: {str(e)}")
+
+
+@databp.cli.command("build_embeddings")
+@click.option('--model', default='nomic-embed-text', help='Ollama embedding model to use')
+@click.option('--batch', default=50, help='Commit batch size')
+def build_embeddings(model, batch):
+    """Generate and store protein embeddings for RAG-based context retrieval."""
+    ollama_host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+    client = ollama.Client(host=ollama_host)
+
+    # verify the model is available before processing all proteins
+    try:
+        client.embed(model=model, input='test')
+    except Exception as exc:
+        print(f"Embedding model '{model}' unavailable: {exc}")
+        print(f"Pull it with: ollama pull {model}")
+        return
+
+    print("Clearing existing embeddings...")
+    db.session.query(ProteinEmbedding).delete()
+    db.session.commit()
+
+    proteins = db.session.query(Protein).all()
+    print(f"Building embeddings for {len(proteins)} proteins using {model}...")
+
+    added = 0
+    for i, protein in enumerate(tqdm(proteins), 1):
+        synonyms = (
+            db.session.query(ProteinSynonym)
+            .filter(ProteinSynonym.uniprot == protein.uniprot)
+            .limit(10)
+            .all()
+        )
+        syn_text = ', '.join(s.synonym for s in synonyms) if synonyms else ''
+
+        chunk = f"Protein: {protein.symbol}\nUniProt: {protein.uniprot}"
+        if protein.description:
+            chunk += f"\nDescription: {protein.description}"
+        if syn_text:
+            chunk += f"\nAliases: {syn_text}"
+
+        try:
+            resp = client.embed(model=model, input=chunk)
+            vector = resp.embeddings[0]
+        except Exception as exc:
+            logging.warning(f"Embedding failed for {protein.uniprot}: {exc}")
+            continue
+
+        db.session.add(ProteinEmbedding(
+            uniprot=protein.uniprot,
+            chunk_text=chunk,
+            embedding=vector,
+        ))
+        added += 1
+
+        if i % batch == 0:
+            db.session.commit()
+
+    db.session.commit()
+    print(f"Done — {added} embeddings stored.")
