@@ -1307,8 +1307,8 @@ def discoverome_gpt():
     return render_template('discoverome_gpt.html')
 
 
-def _find_proteins_in_message(message):
-    """Match tokens in message against protein symbols, UniProt IDs, and synonyms."""
+def _keyword_find_proteins(message):
+    """Token-based fallback: match against protein symbols, UniProt IDs, and synonyms."""
     tokens = list({t.upper() for t in re.findall(r'[A-Za-z][A-Za-z0-9\-]{1,}', message)})
     if not tokens:
         return []
@@ -1326,6 +1326,35 @@ def _find_proteins_in_message(message):
             .all()
         )
         proteins = [s.protein for s in syns if s.protein]
+    return list({p.uniprot: p for p in proteins}.values())
+
+
+def _rag_retrieve_proteins(message, top_k=3):
+    """Embed the user query and retrieve the most relevant proteins via pgvector cosine similarity.
+    Falls back to keyword matching if embeddings are unavailable."""
+    from app.models.models import ProteinEmbedding
+    ollama_host = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+    try:
+        resp = ollama.Client(host=ollama_host).embed(
+            model='nomic-embed-text',
+            input=message,
+        )
+        query_vector = resp.embeddings[0]
+    except Exception:
+        return _keyword_find_proteins(message)
+
+    # check embeddings table is populated
+    if not db.session.query(ProteinEmbedding).limit(1).count():
+        return _keyword_find_proteins(message)
+
+    rows = (
+        db.session.query(ProteinEmbedding)
+        .order_by(ProteinEmbedding.embedding.cosine_distance(query_vector))
+        .limit(top_k)
+        .all()
+    )
+    uniprots = [r.uniprot for r in rows]
+    proteins = db.session.query(Protein).filter(Protein.uniprot.in_(uniprots)).all()
     return list({p.uniprot: p for p in proteins}.values())
 
 
@@ -1488,7 +1517,7 @@ def api_chat():
 
     history = session.get('chat_history', [])
 
-    proteins = _find_proteins_in_message(user_msg)
+    proteins = _rag_retrieve_proteins(user_msg)
 
     context_parts = []
     sql_shown = None
